@@ -1,6 +1,6 @@
 import {Response} from 'express';
 import {AuthRequest} from '../../middleware/auth.middleware';
-import {createQuote, getSellerQuoteById, getSellerQuotes} from './quote.service';
+import {acceptBuyerQuote, createQuote, getBuyerQuoteById, getBuyerQuotes, getSellerQuoteById, getSellerQuotes} from './quote.service';
 
 export const createQuoteController = async (
   req: AuthRequest,
@@ -161,6 +161,167 @@ export const getSellerQuotesController = async (
         success: false,
         message:
           error?.message || 'Unable to fetch quote details',
+      });
+    }
+  };
+
+  export const getBuyerQuotesController = async (
+    req: AuthRequest,
+    res: Response,
+  ) => {
+    try {
+      const buyerId = req.user?.userId;
+  
+      if (!buyerId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized',
+        });
+      }
+  
+      const quotes = await getBuyerQuotes(buyerId);
+  
+      return res.status(200).json({
+        success: true,
+        message: 'Buyer quotes fetched successfully',
+        data: {
+          quotes,
+        },
+      });
+    } catch (error: any) {
+      console.error(
+        'GET BUYER QUOTES ERROR:',
+        error,
+      );
+  
+      return res.status(500).json({
+        success: false,
+        message:
+          error?.message ||
+          'Unable to fetch buyer quotes',
+      });
+    }
+  };
+
+  export const getBuyerQuoteByIdController = async (
+    req: AuthRequest,
+    res: Response,
+  ) => {
+    try {
+      const buyerId = req.user?.userId;
+      const quoteId = req.params.id;
+  
+      if (!buyerId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized',
+        });
+      }
+  
+      if (!quoteId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Quote ID is required',
+        });
+      }
+  
+      const quote = await getBuyerQuoteById(
+        quoteId,
+        buyerId,
+      );
+  
+      return res.status(200).json({
+        success: true,
+        message: 'Buyer quote details fetched successfully',
+        data: {
+          quote,
+        },
+      });
+    } catch (error: any) {
+      console.error('GET BUYER QUOTE DETAILS ERROR:', error);
+  
+      if (error?.message === 'Quote not found') {
+        return res.status(404).json({
+          success: false,
+          message: 'Quote not found',
+        });
+      }
+  
+      return res.status(500).json({
+        success: false,
+        message:
+          error?.message || 'Unable to fetch quote details',
+      });
+    }
+  };
+
+  export const acceptBuyerQuoteController = async (
+    req: AuthRequest,
+    res: Response,
+  ) => {
+    try {
+      const buyerId = req.user?.userId;
+      const quoteId = req.params.id;
+  
+      if (!buyerId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized',
+        });
+      }
+  
+      if (!quoteId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Quote ID is required',
+        });
+      }
+  
+      const result = await acceptBuyerQuote(
+        quoteId,
+        buyerId,
+      );
+  
+      return res.status(200).json({
+        success: true,
+        message: 'Quotation accepted successfully',
+        data: result,
+      });
+    } catch (error: any) {
+      console.error(
+        'ACCEPT BUYER QUOTE ERROR:',
+        error,
+      );
+  
+      if (error?.message === 'Quote not found') {
+        return res.status(404).json({
+          success: false,
+          message: 'Quote not found',
+        });
+      }
+  
+      if (
+        error?.message?.includes(
+          'cannot be accepted',
+        ) ||
+        error?.message?.includes(
+          'already been accepted',
+        ) ||
+        error?.message?.includes(
+          'no longer accepting',
+        )
+      ) {
+        return res.status(409).json({
+          success: false,
+          message: error.message,
+        });
+      }
+  
+      return res.status(500).json({
+        success: false,
+        message:
+          error?.message ||
+          'Unable to accept quotation',
       });
     }
   };

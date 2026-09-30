@@ -488,3 +488,55 @@ export const resetPassword = async (
     passwordReset: true,
   };
 };
+
+export const resendOtp = async (email: string) => {
+  const normalizedEmail = email.trim().toLowerCase();
+
+  if (!normalizedEmail) {
+    throw new Error('Email is required');
+  }
+
+  // Generate 6 digit OTP
+  const otp = Math.floor(
+    100000 + Math.random() * 900000,
+  ).toString();
+
+  // Hash OTP
+  const hashedOtp = await bcrypt.hash(otp, 10);
+
+  // OTP expires in 10 minutes
+  const expiresAt = new Date(
+    Date.now() + 10 * 60 * 1000,
+  );
+
+  // Delete previous OTP
+  await prisma.otp.deleteMany({
+    where: {
+      email: normalizedEmail,
+      type: 'EMAIL_VERIFICATION',
+    },
+  });
+
+  // Save new OTP
+  await prisma.otp.create({
+    data: {
+      email: normalizedEmail,
+      otp: hashedOtp,
+      expiresAt,
+      type: 'EMAIL_VERIFICATION',
+    },
+  });
+
+  // IMPORTANT:
+  // Your sendOtpEmail function expects:
+  // sendOtpEmail(email, otp)
+  await sendOtpEmail(
+    normalizedEmail,
+    otp,
+  );
+
+  return {
+    email: normalizedEmail,
+    expiresAt,
+  };
+};

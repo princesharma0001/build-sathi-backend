@@ -211,3 +211,311 @@ export const getSellerQuotes = async (sellerId: string) => {
   
     return quote;
   };
+
+  export const getBuyerQuotes = async (buyerId: string) => {
+    const quotes = await prisma.quote.findMany({
+      where: {
+        requirement: {
+          buyerId,
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      include: {
+        seller: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+        
+            sellerProfile: {
+              select: {
+                phone: true,
+              },
+            },
+          },
+        },
+        requirement: {
+          include: {
+            material: {
+              include: {
+                category: true,
+              },
+            },
+            deliveryAddress: true,
+            buyer: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                phone: true,
+            
+                buyerProfile: {
+                  select: {
+                    phoneNumber: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+  
+    return quotes;
+  };
+  // export const getBuyerQuotes = async (buyerId: string) => {
+  //   const quotes = await prisma.quote.findMany({
+  //     where: {
+  //       requirement: {
+  //         buyerId,
+  //       },
+  //     },
+  
+  //     orderBy: {
+  //       createdAt: 'desc',
+  //     },
+  
+  //     include: {
+  //       seller: {
+  //         select: {
+  //           id: true,
+  //           name: true,
+  //           email: true,
+  //           phone: true,
+  //         },
+  //       },
+  
+  //       requirement: {
+  //         include: {
+  //           material: {
+  //             include: {
+  //               category: true,
+  //             },
+  //           },
+  
+  //           deliveryAddress: {
+  //             select: {
+  //               id: true,
+  //               state: true,
+  //               city: true,
+  //               pincode: true,
+  //               addressLine1: true,
+  //               addressLine2: true,
+  //               landmark: true,
+  //             },
+  //           },
+  
+  //           buyer: {
+  //             select: {
+  //               id: true,
+  //               name: true,
+  //               email: true,
+  //               phone: true,
+  //             },
+  //           },
+  //         },
+  //       },
+  //     },
+  //   });
+  
+  //   return quotes;
+  // };
+
+  export const getBuyerQuoteById = async (
+    quoteId: string,
+    buyerId: string,
+  ) => {
+    const quote = await prisma.quote.findFirst({
+      where: {
+        id: quoteId,
+        requirement: {
+          buyerId,
+        },
+      },
+  
+      include: {
+        seller: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            role: true,
+        
+            sellerProfile: {
+              select: {
+                phone: true,
+              },
+            },
+          },
+        },
+  
+        requirement: {
+          include: {
+            buyer: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                phone: true,
+            
+                buyerProfile: {
+                  select: {
+                    phoneNumber: true,
+                  },
+                },
+              },
+            },
+  
+            material: {
+              include: {
+                category: true,
+              },
+            },
+  
+            deliveryAddress: {
+              select: {
+                id: true,
+                state: true,
+                city: true,
+                pincode: true,
+                addressLine1: true,
+                addressLine2: true,
+                landmark: true,
+              },
+            },
+          },
+        },
+      },
+    });
+  
+    if (!quote) {
+      throw new Error('Quote not found');
+    }
+  
+    return quote;
+  };
+
+
+export const acceptBuyerQuote = async (
+  quoteId: string,
+  buyerId: string,
+) => {
+  return await prisma.$transaction(async tx => {
+    // 1. Find quote and make sure it belongs to this buyer
+    const quote = await tx.quote.findFirst({
+      where: {
+        id: quoteId,
+        requirement: {
+          buyerId,
+        },
+      },
+      include: {
+        requirement: true,
+        seller: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+          },
+        },
+      },
+    });
+
+    if (!quote) {
+      throw new Error('Quote not found');
+    }
+
+    // 2. Quote must still be pending
+    if (quote.status !== 'PENDING') {
+      throw new Error(
+        `This quote cannot be accepted because it is already ${quote.status.toLowerCase()}`,
+      );
+    }
+
+    // 3. Requirement must still be open/quoted
+    if (
+      quote.requirement.status !== 'OPEN' &&
+      quote.requirement.status !== 'QUOTED'
+    ) {
+      throw new Error(
+        'This requirement is no longer accepting quotations',
+      );
+    }
+
+    // 4. Check if another quote has already been accepted
+    const acceptedQuote = await tx.quote.findFirst({
+      where: {
+        requirementId: quote.requirementId,
+        status: 'ACCEPTED',
+      },
+    });
+
+    if (acceptedQuote) {
+      throw new Error('Another quotation has already been accepted');
+    }
+
+    // 5. Accept selected quote
+    const updatedQuote = await tx.quote.update({
+      where: {
+        id: quote.id,
+      },
+      data: {
+        status: 'ACCEPTED',
+      },
+      include: {
+        seller: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+          },
+        },
+        requirement: {
+          include: {
+            material: {
+              include: {
+                category: true,
+              },
+            },
+            deliveryAddress: true,
+          },
+        },
+      },
+    });
+
+    // 6. Reject all other pending quotes
+    await tx.quote.updateMany({
+      where: {
+        requirementId: quote.requirementId,
+        id: {
+          not: quote.id,
+        },
+        status: 'PENDING',
+      },
+      data: {
+        status: 'REJECTED',
+      },
+    });
+
+    // 7. Mark requirement as quoted/closed for further quotation
+    const updatedRequirement = await tx.requirement.update({
+      where: {
+        id: quote.requirementId,
+      },
+      data: {
+        status: 'QUOTED',
+      },
+    });
+
+    return {
+      quote: updatedQuote,
+      requirement: updatedRequirement,
+    };
+  });
+};

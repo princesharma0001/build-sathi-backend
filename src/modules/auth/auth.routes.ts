@@ -5,6 +5,7 @@ import {
   forgotPasswordController,
   login,
   register,
+  resendOtpController,
   resetPasswordController,
   verifyEmailOtp,
   verifyForgotPasswordOtpController,
@@ -18,7 +19,10 @@ router.post(
   '/verify-otp',
   verifyEmailOtp,
 );
-
+router.post(
+  '/resend-otp',
+  resendOtpController,
+);
 router.post(
   '/select-role',
   chooseRole,
