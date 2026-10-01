@@ -4,6 +4,8 @@ import buyerRoutes from "../modules/buyers/buyer.routes"
 import addressRoutes from "../modules/address/address.routes"
 import materialRoutes from "../modules/material/material.routes"
 import requirementRoutes from "../modules/requirement/requirement.routes"
+import sellerRoutes from "../modules/sellers/seller.routes"
+import quoteRoutes from "../modules/quote/quote.routes"
 const router = Router();
 
 // API root
@@ -27,6 +29,11 @@ router.get('/health', (_req, res) => {
 router.use('/auth', authRoutes);
 router.use('/buyer', buyerRoutes);
 router.use(
+  '/sellers',
+  sellerRoutes,
+);
+
+router.use(
   '/addresses',
   addressRoutes,
 );
@@ -35,6 +42,7 @@ router.use(
   materialRoutes,
 );
 router.use('/requirements', requirementRoutes);
+router.use('/quotes', quoteRoutes);
 
 
 export default router;
