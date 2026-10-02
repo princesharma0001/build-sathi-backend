@@ -2,7 +2,7 @@ import { Response } from "express";
 
 import { AuthRequest } from "../../middleware/auth.middleware";
 
-import { createOrUpdateBuyerProfile, getBuyerProfile } from "./buyer.service";
+import { confirmMaterialReceivedService, createOrUpdateBuyerProfile, getBuyerOrdersService, getBuyerProfile } from "./buyer.service";
 
 export const saveBuyerProfile = async (req: AuthRequest, res: Response) => {
   try {
@@ -109,6 +109,74 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
       success: false,
       message:
         error instanceof Error ? error.message : "Unable to get buyer profile",
+    });
+  }
+};
+
+export const getBuyerOrdersController = async (
+  req: any,
+  res: any,
+) => {
+  try {
+    console.log('REQ USER:', req.user);
+
+    const buyerId = req.user.id;
+
+    console.log('BUYER ID:', buyerId);
+
+    const orders = await getBuyerOrdersService(buyerId);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Buyer orders fetched successfully',
+      data: orders,
+    });
+  } catch (error: any) {
+    console.error('GET BUYER ORDERS ERROR:', error);
+
+    return res.status(500).json({
+      success: false,
+      message: error?.message || 'Failed to fetch buyer orders',
+    });
+  }
+};
+
+export const confirmMaterialReceivedController = async (
+  req: any,
+  res: any,
+) => {
+  try {
+    const buyerId = req.user.userId; // apne authMiddleware ke according change karein
+    const {orderId} = req.params;
+
+    if (!buyerId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Buyer ID not found',
+      });
+    }
+
+    const order = await confirmMaterialReceivedService(
+      buyerId,
+      orderId,
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'Material received successfully',
+      data: order,
+    });
+  } catch (error: any) {
+    console.error(
+      'CONFIRM MATERIAL RECEIVED ERROR:',
+      error,
+    );
+
+    return res.status(400).json({
+      success: false,
+      message:
+        error?.message ||
+        'Failed to confirm material received',
     });
   }
 };

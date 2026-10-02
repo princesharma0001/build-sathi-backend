@@ -1,6 +1,8 @@
 import { Router } from 'express';
 
 import {
+  confirmMaterialReceivedController,
+  getBuyerOrdersController,
   getProfile,
   saveBuyerProfile,
 } from './buyer.controller';
@@ -10,6 +12,8 @@ import {
 } from '../../middleware/auth.middleware';
 
 const router = Router();
+
+
 
 router.get(
   '/profile',
@@ -27,6 +31,18 @@ router.patch(
   '/profile',
   authMiddleware,
   saveBuyerProfile,
+);
+
+router.get(
+  "/orders",
+  authMiddleware,
+  getBuyerOrdersController,
+);
+
+router.patch(
+  '/orders/:orderId/received',
+  authMiddleware,
+  confirmMaterialReceivedController,
 );
 
 export default router;

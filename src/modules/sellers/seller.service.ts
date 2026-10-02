@@ -13,6 +13,15 @@ interface CreateSellerBasicProfileData {
   
 }
 
+interface DispatchMaterialInput {
+  quoteId: string;
+  driverName: string;
+  driverPhone: string;
+  vehicleNumber: string;
+  expectedDeliveryDate?: string;
+  deliveryNotes?: string;
+}
+
 // UPDATE SELLER PROFILE
 interface UpdateSellerProfileData {
   ownerName?: string;
@@ -849,4 +858,232 @@ export const getSellerDashboard = async (sellerId: string) => {
         }
       : null,
   };
+};
+
+
+
+
+export const dispatchMaterial = async (
+  sellerId: string,
+  data: DispatchMaterialInput,
+) => {
+  const {
+    quoteId,
+    driverName,
+    driverPhone,
+    vehicleNumber,
+    expectedDeliveryDate,
+    deliveryNotes,
+  } = data;
+
+  // 1. Validate required fields
+  if (
+    !quoteId ||
+    !driverName ||
+    !driverPhone ||
+    !vehicleNumber
+  ) {
+    const error: any = new Error(
+      "quoteId, driverName, driverPhone and vehicleNumber are required",
+    );
+    error.statusCode = 400;
+    throw error;
+  }
+
+  // 2. Find accepted quote
+  const quote = await prisma.quote.findFirst({
+    where: {
+      id: quoteId,
+      sellerId,
+      status: "ACCEPTED",
+    },
+    include: {
+      requirement: {
+        include: {
+          material: {
+            include: {
+              category: true,
+            },
+          },
+          deliveryAddress: true,
+          buyer: true,
+        },
+      },
+    },
+  });
+
+  if (!quote) {
+    const error: any = new Error(
+      "Accepted quotation not found",
+    );
+    error.statusCode = 404;
+    throw error;
+  }
+
+  // 3. Check if order already exists
+  const existingOrder = await prisma.order.findUnique({
+    where: {
+      quoteId: quote.id,
+    },
+  });
+
+  if (existingOrder) {
+    const error: any = new Error(
+      "Order has already been created for this quotation",
+    );
+    error.statusCode = 409;
+    throw error;
+  }
+
+  // 4. Generate order number
+  const orderNumber = `BS-${Date.now()}`;
+
+  // 5. Create Order + update requirement + update quote
+  const order = await prisma.$transaction(async (tx) => {
+    const createdOrder = await tx.order.create({
+      data: {
+        orderNumber,
+
+        requirementId: quote.requirementId,
+        quoteId: quote.id,
+
+        buyerId: quote.requirement.buyerId,
+        sellerId: quote.sellerId,
+
+        materialId: quote.requirement.materialId,
+
+        quantity: quote.requirement.quantity,
+        unit: quote.requirement.unit,
+
+        pricePerUnit: quote.pricePerUnit,
+        materialAmount: quote.materialAmount,
+        deliveryCharges: quote.deliveryCharges,
+        totalAmount: quote.totalAmount,
+
+        deliveryAddressId: quote.requirement.deliveryAddressId,
+
+        driverName,
+        driverPhone,
+        vehicleNumber,
+
+        dispatchDate: new Date(),
+
+        expectedDeliveryDate: expectedDeliveryDate
+          ? new Date(expectedDeliveryDate)
+          : null,
+
+        deliveryNotes: deliveryNotes || null,
+
+        status: "DISPATCHED",
+      },
+
+      include: {
+        material: true,
+
+        deliveryAddress: true,
+
+        buyer: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+          },
+        },
+
+        seller: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+          },
+        },
+      },
+    });
+
+    // Requirement → ORDERED
+    await tx.requirement.update({
+      where: {
+        id: quote.requirementId,
+      },
+      data: {
+        status: "ORDERED",
+      },
+    });
+
+    // ⭐ Quote → DISPATCHED
+    await tx.quote.update({
+      where: {
+        id: quote.id,
+      },
+      data: {
+        status: "DISPATCHED",
+      },
+    });
+
+    return createdOrder;
+  });
+
+  return order;
+};
+
+export const getSellerOrders = async (sellerId: string) => {
+  const orders = await prisma.order.findMany({
+    where: {
+      sellerId,
+    },
+
+    include: {
+      material: {
+        select: {
+          id: true,
+          name: true,
+          unit: true,
+          imageUrl: true,
+        },
+      },
+
+      buyer: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+
+          buyerProfile: {
+            select: {
+              companyName: true,
+              phoneNumber: true,
+              state: true,
+              city: true,
+              pincode: true,
+              completeAddress: true,
+            },
+          },
+        },
+      },
+
+      deliveryAddress: true,
+
+      quote: {
+        select: {
+          id: true,
+          pricePerUnit: true,
+          materialAmount: true,
+          deliveryCharges: true,
+          totalAmount: true,
+          deliveryTime: true,
+          validity: true,
+          status: true,
+        },
+      },
+    },
+
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  return orders;
 };

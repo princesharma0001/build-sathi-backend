@@ -130,3 +130,78 @@ export const getBuyerProfile = async (
     },
   };
 };
+
+export const getBuyerOrdersService = async (buyerId: string) => {
+  const orders = await prisma.order.findMany({
+    where: {
+      buyerId,
+    },
+
+    orderBy: {
+      createdAt: 'desc',
+    },
+
+    include: {
+      material: true,
+
+      seller: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+
+          sellerProfile: {
+            select: {
+              id: true,
+              ownerName: true,
+              businessName: true,
+              businessType: true,
+              phone: true,
+              email: true,
+            },
+          },
+        },
+      },
+
+      deliveryAddress: true,
+
+      quote: true,
+    },
+  });
+
+  return orders;
+};
+
+export const confirmMaterialReceivedService = async (
+  buyerId: string,
+  orderId: string,
+) => {
+  const order = await prisma.order.findFirst({
+    where: {
+      id: orderId,
+      buyerId,
+    },
+  });
+
+  if (!order) {
+    throw new Error('Order not found');
+  }
+
+  if (order.status !== 'DISPATCHED') {
+    throw new Error(
+      `Material cannot be received when order status is ${order.status}`,
+    );
+  }
+
+  const updatedOrder = await prisma.order.update({
+    where: {
+      id: orderId,
+    },
+    data: {
+      status: 'DELIVERED',
+    },
+  });
+
+  return updatedOrder;
+};
