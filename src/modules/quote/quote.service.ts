@@ -90,9 +90,7 @@ export const createQuote = async ({
         deliveryTime,
         validity,
         message: message || null,
-
         status: 'PENDING',
-
         quotaSource: quota.source,
         subscriptionId: quota.subscriptionId,
       },
@@ -157,6 +155,12 @@ export const getSellerQuotes = async (sellerId: string) => {
                 name: true,
                 phone: true,
                 email: true,
+            
+                buyerProfile: {
+                  select: {
+                    phoneNumber: true,
+                  },
+                },
               },
             },
             material: {
@@ -208,8 +212,14 @@ export const getSellerQuotes = async (sellerId: string) => {
               select: {
                 id: true,
                 name: true,
-                email: true,
                 phone: true,
+                email: true,
+            
+                buyerProfile: {
+                  select: {
+                    phoneNumber: true,
+                  },
+                },
               },
             },
   

@@ -1,9 +1,10 @@
 import {Router} from 'express';
 
-import {authMiddleware} from '../../middleware/auth.middleware';
+import {authMiddleware,} from '../../middleware/auth.middleware';
 
 import {
   createSellerBasicProfileController,
+  getSellerDashboardController,
   getSellerProfileController,
   getSellerRequirementByIdController,
   getSellerRequirementsController,
@@ -12,12 +13,18 @@ import {
 
 const router = Router();
 
+router.get(
+  '/dashboard',
+  authMiddleware,
+  getSellerDashboardController,
+);
 // CREATE BASIC SELLER PROFILE
 router.post(
     '/profile/basic',
     authMiddleware,
     createSellerBasicProfileController,
   );
+
   
   // GET SELLER PROFILE
   router.get(
@@ -44,5 +51,6 @@ router.post(
     authMiddleware,
     getSellerRequirementByIdController,
   );
+
 
 export default router;

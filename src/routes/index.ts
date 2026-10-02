@@ -7,6 +7,7 @@ import requirementRoutes from "../modules/requirement/requirement.routes"
 import sellerRoutes from "../modules/sellers/seller.routes"
 import quoteRoutes from "../modules/quote/quote.routes"
 import subscriptionRoutes from "../modules/subscription/subscription.routes"
+import { getSellerDashboardController } from '../modules/sellers/seller.controller';
 const router = Router();
 
 // API root
@@ -33,6 +34,7 @@ router.use(
   '/sellers',
   sellerRoutes,
 );
+router.get('/dashboard', getSellerDashboardController);
 
 router.use(
   '/addresses',
