@@ -1,4 +1,9 @@
 import { prisma } from "../../config/database";
+import {
+  consumeQuotation,
+  getQuotaSummary,
+  isTrustedSeller,
+} from "../subscription/subscription.service";
 
 interface CreateQuoteInput {
   requirementId: string;
@@ -19,95 +24,120 @@ export const createQuote = async ({
   validity,
   message,
 }: CreateQuoteInput) => {
-  const requirement = await prisma.requirement.findUnique({
-    where: {
-      id: requirementId,
-    },
-    include: {
-      material: true,
-    },
-  });
+  const quote = await prisma.$transaction(async (tx) => {
+    const requirement = await tx.requirement.findUnique({
+      where: {
+        id: requirementId,
+      },
+      include: {
+        material: true,
+      },
+    });
 
-  if (!requirement) {
-    throw new Error('Requirement not found');
-  }
+    if (!requirement) {
+      throw new Error('Requirement not found');
+    }
 
-  if (requirement.status !== 'OPEN') {
-    throw new Error(
-      'This requirement is no longer accepting quotes',
-    );
-  }
+    if (requirement.status !== 'OPEN') {
+      throw new Error(
+        'This requirement is no longer accepting quotes',
+      );
+    }
 
-  if (!pricePerUnit || pricePerUnit <= 0) {
-    throw new Error('Valid price per unit is required');
-  }
+    if (!pricePerUnit || pricePerUnit <= 0) {
+      throw new Error('Valid price per unit is required');
+    }
 
-  const quantity = Number(requirement.quantity);
+    const quantity = Number(requirement.quantity);
 
-  const materialAmount =
-    quantity * Number(pricePerUnit);
+    const materialAmount =
+      quantity * Number(pricePerUnit);
 
-  const totalAmount =
-    materialAmount + Number(deliveryCharges || 0);
+    const totalAmount =
+      materialAmount + Number(deliveryCharges || 0);
 
-  // Prevent same seller from sending duplicate quote
-  const existingQuote = await prisma.quote.findFirst({
-    where: {
-      requirementId,
-      sellerId,
-      status: 'PENDING',
-    },
-  });
+    // Prevent same seller from sending duplicate quote
+    const existingQuote = await tx.quote.findFirst({
+      where: {
+        requirementId,
+        sellerId,
+        status: 'PENDING',
+      },
+    });
 
-  if (existingQuote) {
-    throw new Error(
-      'You have already sent a quote for this requirement',
-    );
-  }
+    if (existingQuote) {
+      throw new Error(
+        'You have already sent a quote for this requirement',
+      );
+    }
 
-  const quote = await prisma.quote.create({
-    data: {
-      requirementId,
-      sellerId,
+    // Charge one quotation (10 free lifetime, then paid plan).
+    // Throws QuotaExhaustedError when nothing is left. Runs in the same
+    // transaction, so a failed quote never uses up a quotation.
+    const quota = await consumeQuotation(tx, sellerId);
 
-      pricePerUnit,
-      materialAmount,
-      deliveryCharges:
-        deliveryCharges || 0,
-      totalAmount,
+    return tx.quote.create({
+      data: {
+        requirementId,
+        sellerId,
 
-      deliveryTime,
-      validity,
-      message: message || null,
+        pricePerUnit,
+        materialAmount,
+        deliveryCharges:
+          deliveryCharges || 0,
+        totalAmount,
 
-      status: 'PENDING',
-    },
+        deliveryTime,
+        validity,
+        message: message || null,
 
-    include: {
-      requirement: {
-        include: {
-          material: {
-            include: {
-              category: true,
+        status: 'PENDING',
+
+        quotaSource: quota.source,
+        subscriptionId: quota.subscriptionId,
+      },
+
+      include: {
+        requirement: {
+          include: {
+            material: {
+              include: {
+                category: true,
+              },
             },
+
+            deliveryAddress: true,
           },
+        },
 
-          deliveryAddress: true,
+        seller: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+          },
         },
       },
-
-      seller: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          phone: true,
-        },
-      },
-    },
+    });
   });
 
-  return quote;
+  const [quota, trusted] = await Promise.all([
+    getQuotaSummary(sellerId),
+    isTrustedSeller(sellerId),
+  ]);
+
+  return {
+    quote: {
+      ...quote,
+      seller: {...quote.seller, isTrustedSeller: trusted},
+    },
+    quota: {
+      freeQuotationsRemaining: quota.freeQuota.remaining,
+      paidQuotationsRemaining: quota.paidQuotationsRemaining,
+      totalQuotationsRemaining: quota.totalQuotationsRemaining,
+    },
+  };
 };
 
 export const getSellerQuotes = async (sellerId: string) => {

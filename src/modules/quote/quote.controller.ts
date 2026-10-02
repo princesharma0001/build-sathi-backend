@@ -1,6 +1,7 @@
 import {Response} from 'express';
 import {AuthRequest} from '../../middleware/auth.middleware';
 import {acceptBuyerQuote, createQuote, getBuyerQuoteById, getBuyerQuotes, getSellerQuoteById, getSellerQuotes} from './quote.service';
+import {QuotaExhaustedError, getQuotaSummary} from '../subscription/subscription.service';
 
 export const createQuoteController = async (
   req: AuthRequest,
@@ -56,7 +57,7 @@ export const createQuoteController = async (
       });
     }
 
-    const quote = await createQuote({
+    const result = await createQuote({
       requirementId,
       sellerId,
       pricePerUnit: Number(pricePerUnit),
@@ -71,10 +72,28 @@ export const createQuoteController = async (
       success: true,
       message: 'Quote sent successfully',
       data: {
-        quote,
+        quote: result.quote,
+        quota: result.quota,
       },
     });
   } catch (error: any) {
+    if (error instanceof QuotaExhaustedError) {
+      const summary = await getQuotaSummary(req.user!.userId).catch(() => null);
+
+      return res.status(403).json({
+        success: false,
+        code: error.code,
+        message: error.message,
+        action: 'PURCHASE_PLAN',
+        data: summary
+          ? {
+              freeQuota: summary.freeQuota,
+              paidQuotationsRemaining: summary.paidQuotationsRemaining,
+            }
+          : undefined,
+      });
+    }
+
     console.error('CREATE QUOTE ERROR:', error);
 
     return res.status(400).json({

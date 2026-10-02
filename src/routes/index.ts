@@ -6,6 +6,7 @@ import materialRoutes from "../modules/material/material.routes"
 import requirementRoutes from "../modules/requirement/requirement.routes"
 import sellerRoutes from "../modules/sellers/seller.routes"
 import quoteRoutes from "../modules/quote/quote.routes"
+import subscriptionRoutes from "../modules/subscription/subscription.routes"
 const router = Router();
 
 // API root
@@ -43,6 +44,7 @@ router.use(
 );
 router.use('/requirements', requirementRoutes);
 router.use('/quotes', quoteRoutes);
+router.use('/subscriptions', subscriptionRoutes);
 
 
 export default router;

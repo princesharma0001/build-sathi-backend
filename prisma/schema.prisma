@@ -37,6 +37,10 @@ model User {
   phone        String?
   role         UserRole   @default(BUYER)
   status       UserStatus @default(ACTIVE)
+
+  // Lifetime free quotations used by a seller (limit is FREE_QUOTATION_LIMIT, default 10)
+  freeQuotesUsed Int @default(0)
+
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
@@ -45,6 +49,8 @@ model User {
   deliveryAddresses DeliveryAddress[]
   sellerQuotes      Quote[]
   requirements      Requirement[]
+  subscriptions     SellerSubscription[]
+  subscriptionOrders SubscriptionOrder[]
 
   @@index([email])
   @@index([role])
@@ -225,8 +231,14 @@ model Quote {
 
   status QuoteStatus @default(PENDING)
 
+  // Which quota this quotation was charged to
+  quotaSource    QuotaSource @default(FREE)
+  subscriptionId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  subscription SellerSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
 
   requirement Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
 
@@ -235,6 +247,7 @@ model Quote {
   @@index([requirementId])
   @@index([sellerId])
   @@index([status])
+  @@index([subscriptionId])
 }
 
 enum QuoteStatus {
@@ -244,14 +257,117 @@ enum QuoteStatus {
   EXPIRED
 }
 
-model Otp {
-  id        String   @id @default(uuid())
-  email     String
-  otp       String
-  type      String
-  expiresAt DateTime
-  createdAt DateTime @default(now())
+enum QuotaSource {
+  FREE
+  SUBSCRIPTION
+}
 
-  @@index([email])
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+}
+
+enum SubscriptionSource {
+  PURCHASE
+  ADMIN_GRANT
+}
+
+// Plans are data, not code: STANDARD / PLUS / PRO are seeded and editable by admin.
+model SubscriptionPlan {
+  id          String  @id @default(uuid())
+  code        String  @unique // STANDARD | PLUS | PRO
+  name        String
+  description String?
+
+  price    Decimal @db.Decimal(10, 2)
+  currency String  @default("INR")
+
+  quotationLimit Int // quotations included in one purchase
+  validityDays   Int? // null = never expires
+
+  hasTrustedBadge Boolean  @default(false) // true for PRO
+  features        String[]
+  sortOrder       Int      @default(0)
+  isActive        Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subscriptions SellerSubscription[]
+  orders        SubscriptionOrder[]
+
+  @@index([isActive])
+  @@index([sortOrder])
+}
+
+// One row per plan purchase (or admin grant). Values are snapshotted from the plan.
+model SellerSubscription {
+  id       String @id @default(uuid())
+  sellerId String
+  planId   String
+
+  quotationsTotal     Int
+  quotationsRemaining Int
+  hasTrustedBadge     Boolean @default(false)
+
+  status SubscriptionStatus @default(ACTIVE)
+  source SubscriptionSource @default(PURCHASE)
+
+  startsAt  DateTime  @default(now())
+  expiresAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  seller User             @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  plan   SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+  quotes Quote[]
+  order  SubscriptionOrder?
+
+  @@index([sellerId])
+  @@index([planId])
+  @@index([status])
   @@index([expiresAt])
+}
+
+enum PaymentStatus {
+  CREATED
+  PAID
+  FAILED
+}
+
+// One row per Cashfree order (a plan purchase attempt).
+// Plan values are snapshotted so a later price change does not affect a paid order.
+model SubscriptionOrder {
+  id       String @id @default(uuid())
+  orderId  String @unique // order_id we send to Cashfree
+  sellerId String
+  planId   String
+
+  amount   Decimal @db.Decimal(10, 2)
+  currency String  @default("INR")
+
+  quotationLimit  Int
+  validityDays    Int?
+  hasTrustedBadge Boolean @default(false)
+
+  status PaymentStatus @default(CREATED)
+
+  paymentSessionId String?
+  cfOrderId        String?
+  cfPaymentId      String?
+  paymentMethod    String?
+  paidAt           DateTime?
+
+  subscriptionId String? @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  seller       User               @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  plan         SubscriptionPlan   @relation(fields: [planId], references: [id], onDelete: Restrict)
+  subscription SellerSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([sellerId])
+  @@index([status])
 }
