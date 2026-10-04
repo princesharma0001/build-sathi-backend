@@ -18,15 +18,23 @@ import {
   getPlansController,
   grantSubscriptionController,
   updatePlanController,
+  cashfreeWebhookController,
 } from './subscription.controller';
 
 const router = Router();
 
-// ---------- Public ----------
+/* =========================================================
+   PUBLIC
+========================================================= */
+
 router.get('/plans', getPlansController);
+
 router.get('/plans/:id', getPlanController);
 
-// ---------- Seller ----------
+/* =========================================================
+   SELLER
+========================================================= */
+
 router.get(
   '/me',
   authMiddleware,
@@ -40,18 +48,21 @@ router.post(
   requireRole('SELLER'),
   purchasePlanController,
 );
+
 router.get(
   '/orders',
   authMiddleware,
   requireRole('SELLER'),
   listOrdersController,
 );
+
 router.get(
   '/orders/:orderId',
   authMiddleware,
   requireRole('SELLER'),
   getOrderController,
 );
+
 router.post(
   '/orders/:orderId/verify',
   authMiddleware,
@@ -59,9 +70,32 @@ router.post(
   verifyOrderController,
 );
 
-// ---------- Dev only (return 404 in production) ----------
-router.get('/dev/checkout', devCheckoutPage);
-router.get('/dev/payment-result', devPaymentResultPage);
+/* =========================================================
+   CASHFREE WEBHOOK
+   IMPORTANT:
+   Do NOT add authMiddleware here.
+========================================================= */
+
+// router.post(
+//   '/webhook/cashfree',
+//   cashfreeWebhookController,
+// );
+
+
+/* =========================================================
+   DEV / SANDBOX
+========================================================= */
+
+router.get(
+  '/dev/checkout',
+  devCheckoutPage,
+);
+
+router.get(
+  '/dev/payment-result',
+  devPaymentResultPage,
+);
+
 router.post(
   '/dev/orders/:orderId/simulate-payment',
   authMiddleware,
@@ -69,25 +103,31 @@ router.post(
   simulatePaymentController,
 );
 
-// ---------- Admin ----------
+/* =========================================================
+   ADMIN
+========================================================= */
+
 router.get(
   '/admin/plans',
   authMiddleware,
   requireRole('ADMIN'),
   adminListPlansController,
 );
+
 router.post(
   '/admin/plans',
   authMiddleware,
   requireRole('ADMIN'),
   createPlanController,
 );
+
 router.patch(
   '/admin/plans/:id',
   authMiddleware,
   requireRole('ADMIN'),
   updatePlanController,
 );
+
 router.post(
   '/admin/grant',
   authMiddleware,

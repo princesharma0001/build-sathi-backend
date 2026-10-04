@@ -1,6 +1,7 @@
 import { Router } from 'express';
 
 import {
+  adminLoginController,
   chooseRole,
   forgotPasswordController,
   login,
@@ -12,6 +13,7 @@ import {
 } from './auth.controller';
 
 const router = Router();
+router.post("/admin/login", adminLoginController);
 
 router.post('/register', register);
 

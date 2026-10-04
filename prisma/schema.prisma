@@ -438,3 +438,15 @@ enum OrderStatus {
   COMPLETED
   CANCELLED
 }
+
+model Otp {
+  id        String   @id @default(uuid())
+  email     String
+  otp       String
+  type      String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([expiresAt])
+}
