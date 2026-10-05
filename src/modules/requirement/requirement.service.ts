@@ -1,4 +1,5 @@
-import {prisma} from '../../config/database';
+import { prisma } from "../../config/database";
+import { sendPushNotification } from "../notifications/notification.service";
 
 interface CreateRequirementData {
   buyerId: string;
@@ -10,9 +11,7 @@ interface CreateRequirementData {
   notes?: string;
 }
 
-export const createRequirement = async (
-  data: CreateRequirementData,
-) => {
+export const createRequirement = async (data: CreateRequirementData) => {
   const {
     buyerId,
     materialId,
@@ -32,7 +31,7 @@ export const createRequirement = async (
   });
 
   if (!material) {
-    throw new Error('Material not found or inactive');
+    throw new Error("Material not found or inactive");
   }
 
   // Verify delivery address belongs to buyer
@@ -44,12 +43,12 @@ export const createRequirement = async (
   });
 
   if (!address) {
-    throw new Error('Delivery address not found');
+    throw new Error("Delivery address not found");
   }
 
   // Validate quantity
   if (!quantity || quantity <= 0) {
-    throw new Error('Quantity must be greater than zero');
+    throw new Error("Quantity must be greater than zero");
   }
 
   // Create requirement
@@ -62,7 +61,7 @@ export const createRequirement = async (
       unit,
       deliveryPreference,
       notes: notes?.trim() || null,
-      status: 'OPEN',
+      status: "OPEN",
     },
 
     include: {
@@ -85,18 +84,53 @@ export const createRequirement = async (
     },
   });
 
+  // ========================================
+  // SEND NOTIFICATION TO SELLERS
+  // ========================================
+
+  try {
+    const sellers = await prisma.user.findMany({
+      where: {
+        role: "SELLER",
+        status: "ACTIVE",
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    await Promise.all(
+      sellers.map((seller) =>
+        sendPushNotification({
+          userId: seller.id,
+          title: "New Requirement 🔔",
+          body: `${requirement.material.name} requirement received. ${quantity} ${unit} required.`,
+          data: {
+            type: "NEW_REQUIREMENT",
+            requirementId: requirement.id,
+            materialId: materialId,
+          },
+        })
+      )
+    );
+
+    console.log(
+      `✅ New requirement notification sent to ${sellers.length} seller(s)`
+    );
+  } catch (notificationError) {
+    console.error("❌ REQUIREMENT NOTIFICATION ERROR:", notificationError);
+  }
+
   return requirement;
 };
 
-export const getBuyerRequirements = async (
-  buyerId: string,
-) => {
+export const getBuyerRequirements = async (buyerId: string) => {
   return prisma.requirement.findMany({
     where: {
       buyerId,
     },
     orderBy: {
-      createdAt: 'desc',
+      createdAt: "desc",
     },
     include: {
       material: {
@@ -111,7 +145,7 @@ export const getBuyerRequirements = async (
 
 export const getBuyerRequirementById = async (
   buyerId: string,
-  requirementId: string,
+  requirementId: string
 ) => {
   const requirement = await prisma.requirement.findFirst({
     where: {
@@ -129,7 +163,7 @@ export const getBuyerRequirementById = async (
   });
 
   if (!requirement) {
-    throw new Error('Requirement not found');
+    throw new Error("Requirement not found");
   }
 
   return requirement;

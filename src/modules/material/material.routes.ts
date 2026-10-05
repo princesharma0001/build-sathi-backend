@@ -1,4 +1,3 @@
-
 import {Router} from 'express';
 
 import {
@@ -19,29 +18,7 @@ import {authMiddleware} from '../../middleware/auth.middleware';
 const router = Router();
 
 // ==========================================
-// BUYER
-// ==========================================
-
-router.get(
-  '/',
-  authMiddleware,
-  listBuyerMaterials,
-);
-
-router.get(
-  '/categories',
-  authMiddleware,
-  listCategories,
-);
-
-router.get(
-  '/:id',
-  authMiddleware,
-  getMaterial,
-);
-
-// ==========================================
-// ADMIN
+// ADMIN - keep BEFORE dynamic /:id routes
 // ==========================================
 
 router.post(
@@ -90,6 +67,28 @@ router.patch(
   '/admin/:id/status',
   authMiddleware,
   changeMaterialStatus,
+);
+
+// ==========================================
+// BUYER
+// ==========================================
+
+router.get(
+  '/categories',
+  authMiddleware,
+  listCategories,
+);
+
+router.get(
+  '/',
+  authMiddleware,
+  listBuyerMaterials,
+);
+
+router.get(
+  '/:id',
+  authMiddleware,
+  getMaterial,
 );
 
 export default router;

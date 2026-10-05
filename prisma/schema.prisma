@@ -49,14 +49,33 @@ model User {
   deliveryAddresses  DeliveryAddress[]
   sellerQuotes       Quote[]
   requirements       Requirement[]
+  
   subscriptions      SellerSubscription[]
   subscriptionOrders SubscriptionOrder[]
   buyerOrders        Order[]              @relation("BuyerOrders")
   sellerOrders       Order[]              @relation("SellerOrders")
+  deviceTokens UserDeviceToken[]
 
   @@index([email])
   @@index([role])
   @@index([status])
+}
+
+model UserDeviceToken {
+  id         String   @id @default(uuid())
+  userId     String
+  token      String   @unique
+  platform   String?
+  deviceName String?
+  isActive   Boolean  @default(true)
+  lastUsedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isActive])
 }
 
 model RegistrationOtp {
@@ -450,3 +469,4 @@ model Otp {
   @@index([email])
   @@index([expiresAt])
 }
+
