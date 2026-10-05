@@ -1,3 +1,42 @@
+// import express from 'express';
+// import cors from 'cors';
+// import helmet from 'helmet';
+// import morgan from 'morgan';
+
+// import routes from './routes';
+// import {cashfreeWebhookController} from './modules/subscription/subscription.controller';
+
+// const app = express();
+
+// app.use(cors({ origin: '*' }));
+// app.use(helmet());
+// app.use(morgan('dev'));
+
+// // Cashfree webhook needs the RAW body for signature check,
+// // so it must be registered BEFORE express.json()
+// app.post(
+//   '/api/v1/subscriptions/webhook/cashfree',
+//   express.raw({type: '*/*'}),
+//   cashfreeWebhookController,
+// );
+
+// // Body parser — MUST come before routes
+// app.use(express.json());
+// app.use(express.urlencoded({ extended: true }));
+
+// // Health
+// app.get('/health', (_req, res) => {
+//   res.json({
+//     success: true,
+//     message: 'BuildSathi API is running',
+//   });
+// });
+
+// // API routes
+// app.use('/api/v1', routes);
+
+// export default app;
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -8,23 +47,39 @@ import {cashfreeWebhookController} from './modules/subscription/subscription.con
 
 const app = express();
 
-app.use(cors({ origin: '*' }));
+app.use(cors({origin: '*'}));
 app.use(helmet());
 app.use(morgan('dev'));
 
-// Cashfree webhook needs the RAW body for signature check,
-// so it must be registered BEFORE express.json()
+/**
+ * =========================================================
+ * CASHFREE WEBHOOK
+ * =========================================================
+ * IMPORTANT:
+ * Cashfree webhook signature verification requires
+ * the original/raw request body.
+ *
+ * This MUST be registered before express.json().
+ */
 app.post(
   '/api/v1/subscriptions/webhook/cashfree',
   express.raw({type: '*/*'}),
   cashfreeWebhookController,
 );
 
-// Body parser — MUST come before routes
+/**
+ * =========================================================
+ * BODY PARSERS
+ * =========================================================
+ */
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({extended: true}));
 
-// Health
+/**
+ * =========================================================
+ * HEALTH CHECK
+ * =========================================================
+ */
 app.get('/health', (_req, res) => {
   res.json({
     success: true,
@@ -32,7 +87,11 @@ app.get('/health', (_req, res) => {
   });
 });
 
-// API routes
+/**
+ * =========================================================
+ * API ROUTES
+ * =========================================================
+ */
 app.use('/api/v1', routes);
 
 export default app;

@@ -4,6 +4,9 @@ import {AuthRequest} from '../../middleware/auth.middleware';
 
 import {
   createSellerBasicProfile,
+  dispatchMaterial,
+  getSellerDashboard,
+  getSellerOrders,
   getSellerProfile,
   getSellerRequirementById,
   getSellerRequirements,
@@ -336,6 +339,108 @@ export const getSellerProfileController = async (
         success: false,
         message:
           error?.message || 'Requirement not found',
+      });
+    }
+  };
+
+  
+  export const getSellerDashboardController = async (
+    req: Request,
+    res: Response,
+  ) => {
+    try {
+      const sellerId = (req as any).user?.userId;
+  
+      if (!sellerId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized',
+        });
+      }
+  
+      const dashboard = await getSellerDashboard(sellerId);
+  
+      return res.status(200).json({
+        success: true,
+        message: 'Seller dashboard fetched successfully',
+        data: dashboard,
+        meta: {
+          timestamp: new Date().toISOString(),
+        },
+      });
+    } catch (error: any) {
+      console.error(
+        'GET SELLER DASHBOARD ERROR:',
+        error,
+      );
+  
+      return res.status(500).json({
+        success: false,
+        message:
+          error?.message ||
+          'Failed to fetch seller dashboard',
+      });
+    }
+  };
+
+  export const dispatchMaterialController = async (
+    req: AuthRequest,
+    res: Response,
+  ) => {
+    try {
+      const sellerId = req.user?.userId;
+  
+      if (!sellerId) {
+        return res.status(401).json({
+          success: false,
+          message: "Unauthorized",
+        });
+      }
+  
+      const order = await dispatchMaterial(sellerId, req.body);
+  
+      return res.status(201).json({
+        success: true,
+        message: "Material dispatched and order created successfully",
+        data: order,
+      });
+    } catch (error: any) {
+      console.error("Dispatch material error:", error);
+  
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || "Failed to dispatch material",
+      });
+    }
+  };
+
+  export const getSellerOrdersController = async (
+    req: AuthRequest,
+    res: Response,
+  ) => {
+    try {
+      const sellerId = req.user?.userId;
+  
+      if (!sellerId) {
+        return res.status(401).json({
+          success: false,
+          message: "Unauthorized",
+        });
+      }
+  
+      const orders = await getSellerOrders(sellerId);
+  
+      return res.status(200).json({
+        success: true,
+        message: "Seller orders fetched successfully",
+        data: orders,
+      });
+    } catch (error: any) {
+      console.error("Get seller orders error:", error);
+  
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || "Failed to fetch seller orders",
       });
     }
   };

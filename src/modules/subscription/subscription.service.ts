@@ -301,39 +301,229 @@ export const getQuotaSummary = async (sellerId: string) => {
 
 // Uses one free quotation first, then the paid subscription that expires
 // soonest. Conditional updates make this safe under concurrent requests.
-export const consumeQuotation = async (tx: Tx, sellerId: string) => {
+// export const consumeQuotation = async (tx: Tx, sellerId: string) => {
+//   const free = await tx.user.updateMany({
+//     where: {id: sellerId, freeQuotesUsed: {lt: FREE_QUOTATION_LIMIT}},
+//     data: {freeQuotesUsed: {increment: 1}},
+//   });
+
+//   if (free.count === 1) {
+//     return {source: 'FREE' as const, subscriptionId: null};
+//   }
+
+//   const now = new Date();
+
+//   const candidates = await tx.sellerSubscription.findMany({
+//     where: {
+//       ...activeSubscriptionWhere(sellerId, now),
+//       quotationsRemaining: {gt: 0},
+//     },
+//     orderBy: [
+//       {expiresAt: {sort: 'asc', nulls: 'last'}},
+//       {createdAt: 'asc'},
+//     ],
+//   });
+
+//   for (const sub of candidates) {
+//     const result = await tx.sellerSubscription.updateMany({
+//       where: {id: sub.id, quotationsRemaining: {gt: 0}},
+//       data: {quotationsRemaining: {decrement: 1}},
+//     });
+
+//     if (result.count === 1) {
+//       return {source: 'SUBSCRIPTION' as const, subscriptionId: sub.id};
+//     }
+//   }
+
+//   throw new QuotaExhaustedError();
+// };
+
+// export const consumeQuotation = async (
+//   tx: Tx,
+//   sellerId: string,
+// ) => {
+//   const now = new Date();
+
+//   // ==========================================
+//   // 1. CHECK ACTIVE PAID SUBSCRIPTION
+//   // ==========================================
+
+//   const subscriptions = await tx.sellerSubscription.findMany({
+//     where: {
+//       ...activeSubscriptionWhere(sellerId, now),
+//       quotationsRemaining: {
+//         gt: 0,
+//       },
+//     },
+//     orderBy: [
+//       {
+//         expiresAt: {
+//           sort: 'asc',
+//           nulls: 'last',
+//         },
+//       },
+//       {
+//         createdAt: 'asc',
+//       },
+//     ],
+//   });
+
+//   // ==========================================
+//   // 2. CONSUME PAID QUOTA
+//   // ==========================================
+
+//   for (const subscription of subscriptions) {
+//     const result = await tx.sellerSubscription.updateMany({
+//       where: {
+//         id: subscription.id,
+//         quotationsRemaining: {
+//           gt: 0,
+//         },
+//       },
+//       data: {
+//         quotationsRemaining: {
+//           decrement: 1,
+//         },
+//       },
+//     });
+
+//     if (result.count === 1) {
+//       return {
+//         source: 'SUBSCRIPTION' as const,
+//         subscriptionId: subscription.id,
+//       };
+//     }
+//   }
+
+//   // ==========================================
+//   // 3. CONSUME FREE QUOTA
+//   // ==========================================
+
+//   const free = await tx.user.updateMany({
+//     where: {
+//       id: sellerId,
+//       freeQuotesUsed: {
+//         lt: FREE_QUOTATION_LIMIT,
+//       },
+//     },
+//     data: {
+//       freeQuotesUsed: {
+//         increment: 1,
+//       },
+//     },
+//   });
+
+//   if (free.count === 1) {
+//     return {
+//       source: 'FREE' as const,
+//       subscriptionId: null,
+//     };
+//   }
+
+//   // ==========================================
+//   // 4. EVERYTHING EXHAUSTED
+//   // ==========================================
+
+//   throw new QuotaExhaustedError();
+// };
+
+export const consumeQuotation = async (
+  tx: Tx,
+  sellerId: string,
+) => {
+  // =====================================================
+  // 1. FREE QUOTA FIRST
+  // =====================================================
+
   const free = await tx.user.updateMany({
-    where: {id: sellerId, freeQuotesUsed: {lt: FREE_QUOTATION_LIMIT}},
-    data: {freeQuotesUsed: {increment: 1}},
+    where: {
+      id: sellerId,
+      freeQuotesUsed: {
+        lt: FREE_QUOTATION_LIMIT,
+      },
+    },
+    data: {
+      freeQuotesUsed: {
+        increment: 1,
+      },
+    },
   });
 
   if (free.count === 1) {
-    return {source: 'FREE' as const, subscriptionId: null};
+    return {
+      source: 'FREE' as const,
+      subscriptionId: null,
+    };
   }
+
+  // =====================================================
+  // 2. FREE QUOTA FINISHED
+  //    NOW CHECK PAID PLANS ONLY
+  // =====================================================
 
   const now = new Date();
 
-  const candidates = await tx.sellerSubscription.findMany({
+  const subscriptions = await tx.sellerSubscription.findMany({
     where: {
       ...activeSubscriptionWhere(sellerId, now),
-      quotationsRemaining: {gt: 0},
+
+      quotationsRemaining: {
+        gt: 0,
+      },
+
+      // VERY IMPORTANT:
+      // FREE subscription ko yahan count mat karo
+      plan: {
+        code: {
+          not: 'FREE',
+        },
+      },
     },
+
     orderBy: [
-      {expiresAt: {sort: 'asc', nulls: 'last'}},
-      {createdAt: 'asc'},
+      {
+        expiresAt: {
+          sort: 'asc',
+          nulls: 'last',
+        },
+      },
+      {
+        createdAt: 'asc',
+      },
     ],
   });
 
-  for (const sub of candidates) {
+  // =====================================================
+  // 3. CONSUME PLUS / PRO QUOTA
+  // =====================================================
+
+  for (const subscription of subscriptions) {
     const result = await tx.sellerSubscription.updateMany({
-      where: {id: sub.id, quotationsRemaining: {gt: 0}},
-      data: {quotationsRemaining: {decrement: 1}},
+      where: {
+        id: subscription.id,
+        quotationsRemaining: {
+          gt: 0,
+        },
+      },
+
+      data: {
+        quotationsRemaining: {
+          decrement: 1,
+        },
+      },
     });
 
     if (result.count === 1) {
-      return {source: 'SUBSCRIPTION' as const, subscriptionId: sub.id};
+      return {
+        source: 'SUBSCRIPTION' as const,
+        subscriptionId: subscription.id,
+      };
     }
   }
+
+  // =====================================================
+  // 4. NOTHING LEFT
+  // =====================================================
 
   throw new QuotaExhaustedError();
 };

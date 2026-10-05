@@ -41,16 +41,18 @@ model User {
   // Lifetime free quotations used by a seller (limit is FREE_QUOTATION_LIMIT, default 10)
   freeQuotesUsed Int @default(0)
 
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  buyerProfile      BuyerProfile?
-  sellerProfile     SellerProfile?
-  deliveryAddresses DeliveryAddress[]
-  sellerQuotes      Quote[]
-  requirements      Requirement[]
-  subscriptions     SellerSubscription[]
+  buyerProfile       BuyerProfile?
+  sellerProfile      SellerProfile?
+  deliveryAddresses  DeliveryAddress[]
+  sellerQuotes       Quote[]
+  requirements       Requirement[]
+  subscriptions      SellerSubscription[]
   subscriptionOrders SubscriptionOrder[]
+  buyerOrders        Order[]              @relation("BuyerOrders")
+  sellerOrders       Order[]              @relation("SellerOrders")
 
   feedbackGiven      Feedback[] @relation("FeedbackGiven")
   feedbackReceived   Feedback[] @relation("FeedbackReceived")
@@ -115,6 +117,7 @@ model DeliveryAddress {
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   requirements Requirement[]
+  orders       Order[]
 
   @@index([userId])
 }
@@ -157,6 +160,7 @@ model Material {
 
   category     MaterialCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   requirements Requirement[]
+  orders       Order[]
 
   @@index([categoryId])
   @@index([isActive])
@@ -184,6 +188,7 @@ model Requirement {
   material        Material        @relation(fields: [materialId], references: [id], onDelete: Restrict)
   deliveryAddress DeliveryAddress @relation(fields: [deliveryAddressId], references: [id], onDelete: Restrict)
   quotes          Quote[]
+  orders          Order[]
 
   @@index([buyerId])
   @@index([materialId])
@@ -237,9 +242,9 @@ model Quote {
   // Which quota this quotation was charged to
   quotaSource    QuotaSource @default(FREE)
   subscriptionId String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  order          Order?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
 
   subscription SellerSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
 
@@ -258,6 +263,7 @@ enum QuoteStatus {
   ACCEPTED
   REJECTED
   EXPIRED
+  DISPATCHED
 }
 
 enum QuotaSource {
@@ -322,8 +328,8 @@ model SellerSubscription {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  seller User             @relation(fields: [sellerId], references: [id], onDelete: Cascade)
-  plan   SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+  seller User               @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  plan   SubscriptionPlan   @relation(fields: [planId], references: [id], onDelete: Restrict)
   quotes Quote[]
   order  SubscriptionOrder?
 
@@ -367,8 +373,8 @@ model SubscriptionOrder {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  seller       User               @relation(fields: [sellerId], references: [id], onDelete: Cascade)
-  plan         SubscriptionPlan   @relation(fields: [planId], references: [id], onDelete: Restrict)
+  seller       User                @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  plan         SubscriptionPlan    @relation(fields: [planId], references: [id], onDelete: Restrict)
   subscription SellerSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
 
   @@index([sellerId])
@@ -384,15 +390,85 @@ model Feedback {
 
   rating  Int // 1 to 5
   comment String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // order    Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order    Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
   reviewer User  @relation("FeedbackGiven", fields: [reviewerId], references: [id], onDelete: Cascade)
   reviewee User  @relation("FeedbackReceived", fields: [revieweeId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([orderId, reviewerId])
   @@index([revieweeId, createdAt])
   @@index([reviewerId])
+
+}
+model Order {
+  id String @id @default(uuid())
+
+  orderNumber String @unique
+
+  requirementId String
+  quoteId       String @unique
+  buyerId       String
+  sellerId      String
+
+  materialId String
+
+  quantity Decimal @db.Decimal(12, 2)
+  unit     String
+
+  pricePerUnit    Decimal @db.Decimal(12, 2)
+  materialAmount  Decimal @db.Decimal(12, 2)
+  deliveryCharges Decimal @db.Decimal(12, 2)
+  totalAmount     Decimal @db.Decimal(12, 2)
+
+  deliveryAddressId String
+
+  driverName    String
+  driverPhone   String
+  vehicleNumber String
+
+  dispatchDate         DateTime  @default(now())
+  expectedDeliveryDate DateTime?
+
+  deliveryNotes String?
+
+  status OrderStatus @default(DISPATCHED)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  requirement Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  quote       Quote       @relation(fields: [quoteId], references: [id], onDelete: Restrict)
+
+  buyer  User @relation("BuyerOrders", fields: [buyerId], references: [id], onDelete: Cascade)
+  seller User @relation("SellerOrders", fields: [sellerId], references: [id], onDelete: Cascade)
+
+  material Material @relation(fields: [materialId], references: [id], onDelete: Restrict)
+
+  deliveryAddress DeliveryAddress @relation(fields: [deliveryAddressId], references: [id], onDelete: Restrict)
+
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([requirementId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum OrderStatus {
+  DISPATCHED
+  OUT_FOR_DELIVERY
+  DELIVERED
+  COMPLETED
+  CANCELLED
+}
+
+model Otp {
+  id        String   @id @default(uuid())
+  email     String
+  otp       String
+  type      String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([expiresAt])
 }

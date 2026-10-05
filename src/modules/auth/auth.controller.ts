@@ -1,9 +1,11 @@
 import { Request, Response } from 'express';
 
 import {
+  adminLogin,
   forgotPassword,
   loginUser,
   registerUser,
+  resendOtp,
   resetPassword,
   selectRole,
   verifyForgotPasswordOtp,
@@ -340,3 +342,76 @@ export const resetPasswordController =
       });
     }
   };
+
+  export const resendOtpController = async (
+    req: Request,
+    res: Response,
+  ) => {
+    try {
+      const {email} = req.body;
+  
+      if (!email) {
+        return res.status(400).json({
+          success: false,
+          message: 'Email is required',
+        });
+      }
+  
+      const result = await resendOtp(email);
+  
+      return res.status(200).json({
+        success: true,
+        message: 'OTP resent successfully',
+        data: result,
+      });
+    } catch (error: any) {
+      console.error(
+        'RESEND OTP ERROR:',
+        error,
+      );
+  
+      if (error?.message === 'User not found') {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found',
+        });
+      }
+  
+      return res.status(500).json({
+        success: false,
+        message:
+          error?.message ||
+          'Unable to resend OTP',
+      });
+    }
+  };
+
+
+export const adminLoginController = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and password are required",
+      });
+    }
+
+    const result = await adminLogin(email, password);
+
+    return res.status(200).json({
+      success: true,
+      message: "Admin login successful",
+      data: result,
+    });
+  } catch (error: any) {
+    return res.status(401).json({
+      success: false,
+      message: error.message || "Admin login failed",
+    });
+  }
+};

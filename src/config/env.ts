@@ -27,7 +27,6 @@
 //     'BuildSathi <onboarding@resend.dev>',
 // };
 
-
 import dotenv from 'dotenv';
 
 dotenv.config();
