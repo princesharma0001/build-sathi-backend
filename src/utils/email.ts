@@ -2,7 +2,7 @@ import nodemailer, {Transporter} from 'nodemailer';
 
 import {env} from '../config/env';
 
-const SUBJECT = 'Your BuildSathi verification code';
+const SUBJECT = 'Your NeevSathi verification code';
 
 const buildHtml = (otp: string) => `
   <div
@@ -16,7 +16,7 @@ const buildHtml = (otp: string) => `
     "
   >
     <h2 style="color: #ff7a00;">
-      BuildSathi
+      NeevSathi
     </h2>
 
     <p style="font-size: 16px; color: #333;">
@@ -46,7 +46,7 @@ const buildHtml = (otp: string) => `
 `;
 
 const buildText = (otp: string) =>
-  `Your BuildSathi verification code is ${otp}. It expires in 10 minutes.`;
+  `Your NeevSathi verification code is ${otp}. It expires in 10 minutes.`;
 
 // =====================================================
 // SMTP TRANSPORTER

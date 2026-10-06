@@ -2,6 +2,7 @@ import {Prisma} from '@prisma/client';
 
 import {prisma} from '../../config/database';
 import {FREE_QUOTATION_LIMIT} from '../../config/subscription';
+import { createNotification, sendPushNotification } from '../notifications/notification.service';
 
 type Tx = Prisma.TransactionClient;
 
@@ -150,19 +151,60 @@ export const createSubscriptionRecord = (
 };
 
 // Admin grant (no payment). Paid purchases go through subscription.payment.ts
+// export const activateSubscription = async (
+//   sellerId: string,
+//   planId: string,
+//   source: 'PURCHASE' | 'ADMIN_GRANT' = 'ADMIN_GRANT',
+// ) => {
+//   const seller = await prisma.user.findUnique({where: {id: sellerId}});
+
+//   if (!seller) {
+//     throw new Error('Seller not found');
+//   }
+
+//   if (seller.role !== 'SELLER') {
+//     throw new Error('Subscriptions can only be assigned to seller accounts');
+//   }
+
+//   const plan = await prisma.subscriptionPlan.findUnique({
+//     where: {id: planId},
+//   });
+
+//   if (!plan) {
+//     throw new Error('Subscription plan not found');
+//   }
+
+//   if (!plan.isActive) {
+//     throw new Error('This subscription plan is not available');
+//   }
+
+//   return createSubscriptionRecord(prisma, {
+//     sellerId,
+//     planId,
+//     quotationsTotal: plan.quotationLimit,
+//     validityDays: plan.validityDays,
+//     hasTrustedBadge: plan.hasTrustedBadge,
+//     source,
+//   });
+// };
+
 export const activateSubscription = async (
   sellerId: string,
   planId: string,
   source: 'PURCHASE' | 'ADMIN_GRANT' = 'ADMIN_GRANT',
 ) => {
-  const seller = await prisma.user.findUnique({where: {id: sellerId}});
+  const seller = await prisma.user.findUnique({
+    where: {id: sellerId},
+  });
 
   if (!seller) {
     throw new Error('Seller not found');
   }
 
   if (seller.role !== 'SELLER') {
-    throw new Error('Subscriptions can only be assigned to seller accounts');
+    throw new Error(
+      'Subscriptions can only be assigned to seller accounts',
+    );
   }
 
   const plan = await prisma.subscriptionPlan.findUnique({
@@ -174,17 +216,49 @@ export const activateSubscription = async (
   }
 
   if (!plan.isActive) {
-    throw new Error('This subscription plan is not available');
+    throw new Error(
+      'This subscription plan is not available',
+    );
   }
 
-  return createSubscriptionRecord(prisma, {
-    sellerId,
-    planId,
-    quotationsTotal: plan.quotationLimit,
-    validityDays: plan.validityDays,
-    hasTrustedBadge: plan.hasTrustedBadge,
-    source,
-  });
+  const subscription = await createSubscriptionRecord(
+    prisma,
+    {
+      sellerId,
+      planId,
+      quotationsTotal: plan.quotationLimit,
+      validityDays: plan.validityDays,
+      hasTrustedBadge: plan.hasTrustedBadge,
+      source,
+    },
+  );
+
+  // --------------------------------------------------
+  // PUSH NOTIFICATION
+  // --------------------------------------------------
+
+  try {
+    await createNotification({
+      userId: sellerId,
+      title: 'Subscription Activated 🎉',
+      body: `Your ${plan.name} is now active. You can send ${plan.quotationLimit} quotations.`,
+      type: 'SUBSCRIPTION_ACTIVATED',
+      data: {
+        subscriptionId: subscription.id,
+        planId: plan.id,
+        planCode: plan.code,
+        screen: 'SellerSubscription',
+      },
+    });
+  } catch (error) {
+    // Notification failure should NOT fail subscription activation
+    console.error(
+      '❌ Failed to send subscription activation notification:',
+      error,
+    );
+  }
+
+  return subscription;
 };
 
 export const isTrustedSeller = async (sellerId: string) => {
@@ -295,137 +369,6 @@ export const getQuotaSummary = async (sellerId: string) => {
   };
 };
 
-/* =========================================================
-   QUOTA CONSUMPTION (called inside the quote transaction)
-========================================================= */
-
-// Uses one free quotation first, then the paid subscription that expires
-// soonest. Conditional updates make this safe under concurrent requests.
-// export const consumeQuotation = async (tx: Tx, sellerId: string) => {
-//   const free = await tx.user.updateMany({
-//     where: {id: sellerId, freeQuotesUsed: {lt: FREE_QUOTATION_LIMIT}},
-//     data: {freeQuotesUsed: {increment: 1}},
-//   });
-
-//   if (free.count === 1) {
-//     return {source: 'FREE' as const, subscriptionId: null};
-//   }
-
-//   const now = new Date();
-
-//   const candidates = await tx.sellerSubscription.findMany({
-//     where: {
-//       ...activeSubscriptionWhere(sellerId, now),
-//       quotationsRemaining: {gt: 0},
-//     },
-//     orderBy: [
-//       {expiresAt: {sort: 'asc', nulls: 'last'}},
-//       {createdAt: 'asc'},
-//     ],
-//   });
-
-//   for (const sub of candidates) {
-//     const result = await tx.sellerSubscription.updateMany({
-//       where: {id: sub.id, quotationsRemaining: {gt: 0}},
-//       data: {quotationsRemaining: {decrement: 1}},
-//     });
-
-//     if (result.count === 1) {
-//       return {source: 'SUBSCRIPTION' as const, subscriptionId: sub.id};
-//     }
-//   }
-
-//   throw new QuotaExhaustedError();
-// };
-
-// export const consumeQuotation = async (
-//   tx: Tx,
-//   sellerId: string,
-// ) => {
-//   const now = new Date();
-
-//   // ==========================================
-//   // 1. CHECK ACTIVE PAID SUBSCRIPTION
-//   // ==========================================
-
-//   const subscriptions = await tx.sellerSubscription.findMany({
-//     where: {
-//       ...activeSubscriptionWhere(sellerId, now),
-//       quotationsRemaining: {
-//         gt: 0,
-//       },
-//     },
-//     orderBy: [
-//       {
-//         expiresAt: {
-//           sort: 'asc',
-//           nulls: 'last',
-//         },
-//       },
-//       {
-//         createdAt: 'asc',
-//       },
-//     ],
-//   });
-
-//   // ==========================================
-//   // 2. CONSUME PAID QUOTA
-//   // ==========================================
-
-//   for (const subscription of subscriptions) {
-//     const result = await tx.sellerSubscription.updateMany({
-//       where: {
-//         id: subscription.id,
-//         quotationsRemaining: {
-//           gt: 0,
-//         },
-//       },
-//       data: {
-//         quotationsRemaining: {
-//           decrement: 1,
-//         },
-//       },
-//     });
-
-//     if (result.count === 1) {
-//       return {
-//         source: 'SUBSCRIPTION' as const,
-//         subscriptionId: subscription.id,
-//       };
-//     }
-//   }
-
-//   // ==========================================
-//   // 3. CONSUME FREE QUOTA
-//   // ==========================================
-
-//   const free = await tx.user.updateMany({
-//     where: {
-//       id: sellerId,
-//       freeQuotesUsed: {
-//         lt: FREE_QUOTATION_LIMIT,
-//       },
-//     },
-//     data: {
-//       freeQuotesUsed: {
-//         increment: 1,
-//       },
-//     },
-//   });
-
-//   if (free.count === 1) {
-//     return {
-//       source: 'FREE' as const,
-//       subscriptionId: null,
-//     };
-//   }
-
-//   // ==========================================
-//   // 4. EVERYTHING EXHAUSTED
-//   // ==========================================
-
-//   throw new QuotaExhaustedError();
-// };
 
 export const consumeQuotation = async (
   tx: Tx,

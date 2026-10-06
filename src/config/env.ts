@@ -61,7 +61,7 @@ export const env = {
   resendApiKey,
   resendFromEmail:
     process.env.RESEND_FROM_EMAIL ||
-    'BuildSathi <onboarding@resend.dev>',
+    'NeevSathi <onboarding@resend.dev>',
 
   // ---- SMTP ----
   smtpHost: process.env.SMTP_HOST || '',
@@ -72,5 +72,5 @@ export const env = {
   smtpFrom:
     process.env.SMTP_FROM ||
     process.env.SMTP_USER ||
-    'BuildSathi <no-reply@localhost>',
+    'NeevSathi <no-reply@localhost>',
 };

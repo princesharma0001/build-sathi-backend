@@ -3,6 +3,9 @@ import {
   saveDeviceToken,
   deactivateDeviceToken,
   sendPushNotification,
+  getMyNotifications,
+  markNotificationAsRead,
+  markAllNotificationsAsRead,
 } from "./notification.service";
 
 export const registerDeviceToken = async (
@@ -162,6 +165,107 @@ export const sendTestNotification = async (
         success: false,
         message:
           "Failed to send test notification",
+      });
+    }
+  };
+
+  export const getMyNotificationsController = async (
+    req: Request,
+    res: Response,
+  ) => {
+    try {
+      const userId = (req as any).user?.userId;
+  
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized',
+        });
+      }
+  
+      const result = await getMyNotifications(userId);
+  
+      return res.status(200).json({
+        success: true,
+        message: 'Notifications fetched successfully',
+        data: result,
+      });
+    } catch (error) {
+      console.error(
+        '❌ GET NOTIFICATIONS ERROR:',
+        error,
+      );
+  
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch notifications',
+      });
+    }
+  };
+
+  export const markNotificationAsReadController = async (
+    req: Request,
+    res: Response,
+  ) => {
+    try {
+      const userId = (req as any).user?.userId;
+      const {id} = req.params;
+  
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized',
+        });
+      }
+  
+      await markNotificationAsRead(userId, id);
+  
+      return res.status(200).json({
+        success: true,
+        message: 'Notification marked as read',
+      });
+    } catch (error) {
+      console.error(
+        '❌ MARK NOTIFICATION READ ERROR:',
+        error,
+      );
+  
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to mark notification as read',
+      });
+    }
+  };
+
+  export const markAllNotificationsAsReadController = async (
+    req: Request,
+    res: Response,
+  ) => {
+    try {
+      const userId = (req as any).user?.userId;
+  
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized',
+        });
+      }
+  
+      await markAllNotificationsAsRead(userId);
+  
+      return res.status(200).json({
+        success: true,
+        message: 'All notifications marked as read',
+      });
+    } catch (error) {
+      console.error(
+        '❌ MARK ALL NOTIFICATIONS ERROR:',
+        error,
+      );
+  
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to mark all notifications as read',
       });
     }
   };

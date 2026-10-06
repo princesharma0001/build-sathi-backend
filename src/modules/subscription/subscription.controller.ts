@@ -526,9 +526,9 @@ export const devCheckoutPage = (req: Request, res: Response) => {
   res.removeHeader('Cross-Origin-Resource-Policy');
 
   return res.type('html').send(`<!doctype html>
-<html><head><meta charset="utf-8"><title>BuildSathi sandbox checkout</title></head>
+<html><head><meta charset="utf-8"><title>NeevSathi sandbox checkout</title></head>
 <body style="font-family:sans-serif;max-width:640px;margin:24px auto">
-<h3>BuildSathi - sandbox checkout</h3>
+<h3>NeevSathi - sandbox checkout</h3>
 <p id="status">Loading Cashfree SDK...</p>
 <pre id="log" style="background:#f4f4f4;padding:8px;white-space:pre-wrap;word-break:break-all"></pre>
 <button id="go" disabled>Open checkout</button>

@@ -1,4 +1,5 @@
 import { prisma } from "../../config/database";
+import { createNotification, sendPushNotification } from "../notifications/notification.service";
 import {
   consumeQuotation,
   getQuotaSummary,
@@ -14,6 +15,7 @@ interface CreateQuoteInput {
   validity: string;
   message?: string;
 }
+
 
 export const createQuote = async ({
   requirementId,
@@ -71,9 +73,7 @@ export const createQuote = async ({
       );
     }
 
-    // Charge one quotation (10 free lifetime, then paid plan).
-    // Throws QuotaExhaustedError when nothing is left. Runs in the same
-    // transaction, so a failed quote never uses up a quotation.
+    // Consume quotation quota
     const quota = await consumeQuotation(tx, sellerId);
 
     return tx.quote.create({
@@ -83,14 +83,14 @@ export const createQuote = async ({
 
         pricePerUnit,
         materialAmount,
-        deliveryCharges:
-          deliveryCharges || 0,
+        deliveryCharges: deliveryCharges || 0,
         totalAmount,
 
         deliveryTime,
         validity,
         message: message || null,
         status: 'PENDING',
+
         quotaSource: quota.source,
         subscriptionId: quota.subscriptionId,
       },
@@ -120,23 +120,196 @@ export const createQuote = async ({
     });
   });
 
+  // --------------------------------------------------
+  // GET QUOTA + TRUSTED SELLER STATUS
+  // --------------------------------------------------
+
   const [quota, trusted] = await Promise.all([
     getQuotaSummary(sellerId),
     isTrustedSeller(sellerId),
   ]);
 
+  // --------------------------------------------------
+  // PUSH NOTIFICATION → BUYER
+  // --------------------------------------------------
+
+  try {
+    const buyerId = quote.requirement.buyerId;
+
+    if (buyerId) {
+      const materialName =
+        quote.requirement.material?.name ||
+        'your requirement';
+
+        await createNotification({
+          userId: buyerId,
+          title: 'New Quotation Received',
+          body: `You received a new quotation for ${materialName}.`,
+          type: 'NEW_QUOTE',
+          data: {
+            quoteId: quote.id,
+            requirementId: quote.requirementId,
+            screen: 'QuoteDetails',
+          },
+        });
+
+    }
+  } catch (error) {
+    // Push notification failure should NOT fail quote creation
+    console.error(
+      '❌ Failed to send new quote notification:',
+      error,
+    );
+  }
+
+  // --------------------------------------------------
+  // RETURN RESPONSE
+  // --------------------------------------------------
+
   return {
     quote: {
       ...quote,
-      seller: {...quote.seller, isTrustedSeller: trusted},
+
+      seller: {
+        ...quote.seller,
+        isTrustedSeller: trusted,
+      },
     },
+
     quota: {
-      freeQuotationsRemaining: quota.freeQuota.remaining,
-      paidQuotationsRemaining: quota.paidQuotationsRemaining,
-      totalQuotationsRemaining: quota.totalQuotationsRemaining,
+      freeQuotationsRemaining:
+        quota.freeQuota.remaining,
+
+      paidQuotationsRemaining:
+        quota.paidQuotationsRemaining,
+
+      totalQuotationsRemaining:
+        quota.totalQuotationsRemaining,
     },
   };
 };
+// export const createQuote = async ({
+//   requirementId,
+//   sellerId,
+//   pricePerUnit,
+//   deliveryCharges = 0,
+//   deliveryTime,
+//   validity,
+//   message,
+// }: CreateQuoteInput) => {
+//   const quote = await prisma.$transaction(async (tx) => {
+//     const requirement = await tx.requirement.findUnique({
+//       where: {
+//         id: requirementId,
+//       },
+//       include: {
+//         material: true,
+//       },
+//     });
+
+//     if (!requirement) {
+//       throw new Error('Requirement not found');
+//     }
+
+//     if (requirement.status !== 'OPEN') {
+//       throw new Error(
+//         'This requirement is no longer accepting quotes',
+//       );
+//     }
+
+//     if (!pricePerUnit || pricePerUnit <= 0) {
+//       throw new Error('Valid price per unit is required');
+//     }
+
+//     const quantity = Number(requirement.quantity);
+
+//     const materialAmount =
+//       quantity * Number(pricePerUnit);
+
+//     const totalAmount =
+//       materialAmount + Number(deliveryCharges || 0);
+
+//     // Prevent same seller from sending duplicate quote
+//     const existingQuote = await tx.quote.findFirst({
+//       where: {
+//         requirementId,
+//         sellerId,
+//         status: 'PENDING',
+//       },
+//     });
+
+//     if (existingQuote) {
+//       throw new Error(
+//         'You have already sent a quote for this requirement',
+//       );
+//     }
+
+//     // Charge one quotation (10 free lifetime, then paid plan).
+//     // Throws QuotaExhaustedError when nothing is left. Runs in the same
+//     // transaction, so a failed quote never uses up a quotation.
+//     const quota = await consumeQuotation(tx, sellerId);
+
+//     return tx.quote.create({
+//       data: {
+//         requirementId,
+//         sellerId,
+
+//         pricePerUnit,
+//         materialAmount,
+//         deliveryCharges:
+//           deliveryCharges || 0,
+//         totalAmount,
+
+//         deliveryTime,
+//         validity,
+//         message: message || null,
+//         status: 'PENDING',
+//         quotaSource: quota.source,
+//         subscriptionId: quota.subscriptionId,
+//       },
+
+//       include: {
+//         requirement: {
+//           include: {
+//             material: {
+//               include: {
+//                 category: true,
+//               },
+//             },
+
+//             deliveryAddress: true,
+//           },
+//         },
+
+//         seller: {
+//           select: {
+//             id: true,
+//             name: true,
+//             email: true,
+//             phone: true,
+//           },
+//         },
+//       },
+//     });
+//   });
+
+//   const [quota, trusted] = await Promise.all([
+//     getQuotaSummary(sellerId),
+//     isTrustedSeller(sellerId),
+//   ]);
+
+//   return {
+//     quote: {
+//       ...quote,
+//       seller: {...quote.seller, isTrustedSeller: trusted},
+//     },
+//     quota: {
+//       freeQuotationsRemaining: quota.freeQuota.remaining,
+//       paidQuotationsRemaining: quota.paidQuotationsRemaining,
+//       totalQuotationsRemaining: quota.totalQuotationsRemaining,
+//     },
+//   };
+// };
 
 export const getSellerQuotes = async (sellerId: string) => {
     const quotes = await prisma.quote.findMany({
@@ -439,12 +612,11 @@ export const getSellerQuotes = async (sellerId: string) => {
     return quote;
   };
 
-
 export const acceptBuyerQuote = async (
   quoteId: string,
   buyerId: string,
 ) => {
-  return await prisma.$transaction(async tx => {
+  const result = await prisma.$transaction(async tx => {
     // 1. Find quote and make sure it belongs to this buyer
     const quote = await tx.quote.findFirst({
       where: {
@@ -453,8 +625,10 @@ export const acceptBuyerQuote = async (
           buyerId,
         },
       },
+
       include: {
         requirement: true,
+
         seller: {
           select: {
             id: true,
@@ -496,7 +670,9 @@ export const acceptBuyerQuote = async (
     });
 
     if (acceptedQuote) {
-      throw new Error('Another quotation has already been accepted');
+      throw new Error(
+        'Another quotation has already been accepted',
+      );
     }
 
     // 5. Accept selected quote
@@ -504,9 +680,11 @@ export const acceptBuyerQuote = async (
       where: {
         id: quote.id,
       },
+
       data: {
         status: 'ACCEPTED',
       },
+
       include: {
         seller: {
           select: {
@@ -516,6 +694,7 @@ export const acceptBuyerQuote = async (
             phone: true,
           },
         },
+
         requirement: {
           include: {
             material: {
@@ -523,13 +702,30 @@ export const acceptBuyerQuote = async (
                 category: true,
               },
             },
+
             deliveryAddress: true,
           },
         },
       },
     });
 
-    // 6. Reject all other pending quotes
+    // 6. Find other pending quotes BEFORE rejecting them
+    const rejectedQuotes = await tx.quote.findMany({
+      where: {
+        requirementId: quote.requirementId,
+        id: {
+          not: quote.id,
+        },
+        status: 'PENDING',
+      },
+
+      select: {
+        id: true,
+        sellerId: true,
+      },
+    });
+
+    // 7. Reject all other pending quotes
     await tx.quote.updateMany({
       where: {
         requirementId: quote.requirementId,
@@ -538,16 +734,18 @@ export const acceptBuyerQuote = async (
         },
         status: 'PENDING',
       },
+
       data: {
         status: 'REJECTED',
       },
     });
 
-    // 7. Mark requirement as quoted/closed for further quotation
+    // 8. Mark requirement as quoted/closed
     const updatedRequirement = await tx.requirement.update({
       where: {
         id: quote.requirementId,
       },
+
       data: {
         status: 'QUOTED',
       },
@@ -556,6 +754,195 @@ export const acceptBuyerQuote = async (
     return {
       quote: updatedQuote,
       requirement: updatedRequirement,
+      rejectedQuotes,
     };
   });
+
+  // --------------------------------------------------
+  // PUSH NOTIFICATION
+  // --------------------------------------------------
+
+  // Material name
+  const materialName =
+    result.quote.requirement.material?.name ||
+    'your requirement';
+
+  // --------------------------------------------------
+  // 1. NOTIFY ACCEPTED SELLER
+  // --------------------------------------------------
+
+  try {
+    await createNotification({
+      userId: result.quote.seller.id,
+      title: 'Quotation Accepted 🎉',
+      body: `Your quotation for ${materialName} has been accepted by the buyer.`,
+      type: 'QUOTE_ACCEPTED',
+      data: {
+        quoteId: result.quote.id,
+        requirementId: result.quote.requirementId,
+        screen: 'SellerQuoteDetails',
+      },
+    });
+  
+  } catch (error) {
+    console.error(
+      '❌ Failed to send quote accepted notification:',
+      error,
+    );
+  }
+
+  // --------------------------------------------------
+  // 2. NOTIFY REJECTED SELLERS
+  // --------------------------------------------------
+
+  for (const rejectedQuote of result.rejectedQuotes) {
+    try {
+      await createNotification({
+        userId: rejectedQuote.sellerId,
+        title: 'Quotation Not Selected',
+        body: `Your quotation for ${materialName} was not selected by the buyer.`,
+        type: 'QUOTE_REJECTED',
+        data: {
+          quoteId: rejectedQuote.id,
+          requirementId: result.quote.requirementId,
+          screen: 'SellerQuoteDetails',
+        },
+      });
+     
+    } catch (error) {
+      console.error(
+        `❌ Failed to send rejection notification to seller ${rejectedQuote.sellerId}:`,
+        error,
+      );
+    }
+  }
+
+  // --------------------------------------------------
+  // RETURN RESPONSE
+  // --------------------------------------------------
+
+  return {
+    quote: result.quote,
+    requirement: result.requirement,
+  };
 };
+
+// export const acceptBuyerQuote = async (
+//   quoteId: string,
+//   buyerId: string,
+// ) => {
+//   return await prisma.$transaction(async tx => {
+//     // 1. Find quote and make sure it belongs to this buyer
+//     const quote = await tx.quote.findFirst({
+//       where: {
+//         id: quoteId,
+//         requirement: {
+//           buyerId,
+//         },
+//       },
+//       include: {
+//         requirement: true,
+//         seller: {
+//           select: {
+//             id: true,
+//             name: true,
+//             email: true,
+//             phone: true,
+//           },
+//         },
+//       },
+//     });
+
+//     if (!quote) {
+//       throw new Error('Quote not found');
+//     }
+
+//     // 2. Quote must still be pending
+//     if (quote.status !== 'PENDING') {
+//       throw new Error(
+//         `This quote cannot be accepted because it is already ${quote.status.toLowerCase()}`,
+//       );
+//     }
+
+//     // 3. Requirement must still be open/quoted
+//     if (
+//       quote.requirement.status !== 'OPEN' &&
+//       quote.requirement.status !== 'QUOTED'
+//     ) {
+//       throw new Error(
+//         'This requirement is no longer accepting quotations',
+//       );
+//     }
+
+//     // 4. Check if another quote has already been accepted
+//     const acceptedQuote = await tx.quote.findFirst({
+//       where: {
+//         requirementId: quote.requirementId,
+//         status: 'ACCEPTED',
+//       },
+//     });
+
+//     if (acceptedQuote) {
+//       throw new Error('Another quotation has already been accepted');
+//     }
+
+//     // 5. Accept selected quote
+//     const updatedQuote = await tx.quote.update({
+//       where: {
+//         id: quote.id,
+//       },
+//       data: {
+//         status: 'ACCEPTED',
+//       },
+//       include: {
+//         seller: {
+//           select: {
+//             id: true,
+//             name: true,
+//             email: true,
+//             phone: true,
+//           },
+//         },
+//         requirement: {
+//           include: {
+//             material: {
+//               include: {
+//                 category: true,
+//               },
+//             },
+//             deliveryAddress: true,
+//           },
+//         },
+//       },
+//     });
+
+//     // 6. Reject all other pending quotes
+//     await tx.quote.updateMany({
+//       where: {
+//         requirementId: quote.requirementId,
+//         id: {
+//           not: quote.id,
+//         },
+//         status: 'PENDING',
+//       },
+//       data: {
+//         status: 'REJECTED',
+//       },
+//     });
+
+//     // 7. Mark requirement as quoted/closed for further quotation
+//     const updatedRequirement = await tx.requirement.update({
+//       where: {
+//         id: quote.requirementId,
+//       },
+//       data: {
+//         status: 'QUOTED',
+//       },
+//     });
+
+//     return {
+//       quote: updatedQuote,
+//       requirement: updatedRequirement,
+//     };
+//   });
+// };

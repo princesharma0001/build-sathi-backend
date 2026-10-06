@@ -83,7 +83,7 @@ app.use(express.urlencoded({extended: true}));
 app.get('/health', (_req, res) => {
   res.json({
     success: true,
-    message: 'BuildSathi API is running',
+    message: 'NeevSathi API is running',
   });
 });
 

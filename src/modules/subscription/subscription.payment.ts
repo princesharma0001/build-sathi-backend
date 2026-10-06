@@ -78,7 +78,7 @@ export const createPurchaseOrder = async (sellerId: string, planId: string) => {
     customerPhone: phone.replace(/\s/g, '').replace(/^\+91/, ''),
     customerName: seller.sellerProfile?.ownerName || seller.name,
     customerEmail: seller.email,
-    note: `BuildSathi ${plan.name} plan`,
+    note: `NeevSathi ${plan.name} plan`,
   });
 
   if (!cfOrder.payment_session_id) {

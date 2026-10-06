@@ -55,6 +55,7 @@ model User {
   buyerOrders        Order[]              @relation("BuyerOrders")
   sellerOrders       Order[]              @relation("SellerOrders")
   deviceTokens UserDeviceToken[]
+  notifications Notification[]
 
   @@index([email])
   @@index([role])
@@ -470,3 +471,24 @@ model Otp {
   @@index([expiresAt])
 }
 
+
+model Notification {
+  id        String   @id @default(uuid())
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type      String
+  title     String
+  body      String
+
+  data      Json?
+
+  isRead    Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([userId, isRead])
+}

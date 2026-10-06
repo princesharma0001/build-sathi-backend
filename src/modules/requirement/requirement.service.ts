@@ -1,5 +1,5 @@
 import { prisma } from "../../config/database";
-import { sendPushNotification } from "../notifications/notification.service";
+import { createNotification, sendPushNotification } from "../notifications/notification.service";
 
 interface CreateRequirementData {
   buyerId: string;
@@ -101,19 +101,22 @@ export const createRequirement = async (data: CreateRequirementData) => {
 
     await Promise.all(
       sellers.map((seller) =>
-        sendPushNotification({
+        createNotification({
           userId: seller.id,
-          title: "New Requirement 🔔",
+    
+          title: 'New Requirement 🔔',
           body: `${requirement.material.name} requirement received. ${quantity} ${unit} required.`,
+    
+          type: 'NEW_REQUIREMENT',
+    
           data: {
-            type: "NEW_REQUIREMENT",
             requirementId: requirement.id,
-            materialId: materialId,
+            materialId,
+            screen: 'SellerRequirements',
           },
-        })
-      )
+        }),
+      ),
     );
-
     console.log(
       `✅ New requirement notification sent to ${sellers.length} seller(s)`
     );

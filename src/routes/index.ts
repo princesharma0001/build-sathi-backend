@@ -15,7 +15,7 @@ const router = Router();
 router.get('/', (_req, res) => {
   res.json({
     success: true,
-    message: 'Welcome to BuildSathi API',
+    message: 'Welcome to NeevSathi API',
     version: 'v1',
   });
 });
@@ -24,7 +24,7 @@ router.get('/', (_req, res) => {
 router.get('/health', (_req, res) => {
   res.json({
     success: true,
-    message: 'BuildSathi API is healthy',
+    message: 'NeevSathi API is healthy',
   });
 });
 
@@ -35,6 +35,7 @@ router.use(
   '/sellers',
   sellerRoutes,
 );
+
 router.get('/dashboard', getSellerDashboardController);
 router.use("/notifications", notificationRoutes);
 

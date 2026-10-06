@@ -1,5 +1,7 @@
-import { prisma } from "../../config/database";
-import { firebaseMessaging } from "../../config/firebase";
+
+
+import { prisma } from '../../config/database';
+import {firebaseMessaging} from '../../config/firebase';
 
 interface SaveDeviceTokenInput {
   userId: string;
@@ -7,6 +9,10 @@ interface SaveDeviceTokenInput {
   platform?: string;
   deviceName?: string;
 }
+
+/* =========================================================
+   SAVE DEVICE TOKEN
+========================================================= */
 
 export const saveDeviceToken = async ({
   userId,
@@ -40,6 +46,10 @@ export const saveDeviceToken = async ({
   return deviceToken;
 };
 
+/* =========================================================
+   DEACTIVATE DEVICE TOKEN
+========================================================= */
+
 export const deactivateDeviceToken = async (
   userId: string,
   token: string,
@@ -56,9 +66,10 @@ export const deactivateDeviceToken = async (
   });
 };
 
-/**
- * Send push notification to a user
- */
+/* =========================================================
+   SEND PUSH NOTIFICATION
+========================================================= */
+
 export const sendPushNotification = async ({
   userId,
   title,
@@ -70,7 +81,7 @@ export const sendPushNotification = async ({
   body: string;
   data?: Record<string, string>;
 }) => {
-  // 1. Get active device tokens
+  // Get active device tokens
   const devices = await prisma.userDeviceToken.findMany({
     where: {
       userId,
@@ -87,13 +98,12 @@ export const sendPushNotification = async ({
     return {
       success: false,
       sent: 0,
-      message: "No active device tokens found",
+      failed: 0,
+      message: 'No active device tokens found',
     };
   }
 
-  const tokens = devices.map(
-    (device) => device.token,
-  );
+  const tokens = devices.map(device => device.token);
 
   console.log(
     `📲 Sending notification to ${tokens.length} device(s)`,
@@ -112,59 +122,57 @@ export const sendPushNotification = async ({
         data: data ?? {},
 
         android: {
-          priority: "high",
+          priority: 'high',
 
           notification: {
-            channelId: "default",
-            sound: "default",
+            channelId: 'default',
+            sound: 'default',
           },
         },
 
         apns: {
           payload: {
             aps: {
-              sound: "default",
+              sound: 'default',
             },
           },
         },
       });
 
     console.log(
-      "📨 Firebase response:",
+      '📨 Firebase response:',
       response.successCount,
-      "success,",
+      'success,',
       response.failureCount,
-      "failed",
+      'failed',
     );
 
-    // 2. Deactivate invalid tokens
+    /* =====================================================
+       DEACTIVATE INVALID TOKENS
+    ===================================================== */
+
     const invalidTokenIds: string[] = [];
 
-    response.responses.forEach(
-      (result, index) => {
-        if (!result.success) {
-          console.error(
-            "❌ FCM token failed:",
-            tokens[index],
-            result.error?.message,
-          );
+    response.responses.forEach((result, index) => {
+      if (!result.success) {
+        console.error(
+          '❌ FCM token failed:',
+          tokens[index],
+          result.error?.message,
+        );
 
-          const errorCode =
-            result.error?.code;
+        const errorCode = result.error?.code;
 
-          if (
-            errorCode ===
-              "messaging/registration-token-not-registered" ||
-            errorCode ===
-              "messaging/invalid-registration-token"
-          ) {
-            invalidTokenIds.push(
-              devices[index].id,
-            );
-          }
+        if (
+          errorCode ===
+            'messaging/registration-token-not-registered' ||
+          errorCode ===
+            'messaging/invalid-registration-token'
+        ) {
+          invalidTokenIds.push(devices[index].id);
         }
-      },
-    );
+      }
+    });
 
     if (invalidTokenIds.length > 0) {
       await prisma.userDeviceToken.updateMany({
@@ -191,10 +199,198 @@ export const sendPushNotification = async ({
     };
   } catch (error) {
     console.error(
-      "❌ SEND PUSH NOTIFICATION ERROR:",
+      '❌ SEND PUSH NOTIFICATION ERROR:',
       error,
     );
 
     throw error;
   }
+};
+
+/* =========================================================
+   CREATE NOTIFICATION
+   DB NOTIFICATION + PUSH NOTIFICATION
+========================================================= */
+
+export const createNotification = async ({
+  userId,
+  title,
+  body,
+  type,
+  data,
+}: {
+  userId: string;
+  title: string;
+  body: string;
+  type: string;
+  data?: Record<string, string>;
+}) => {
+  /*
+   * First save notification in DB.
+   *
+   * This makes sure notification history exists
+   * even if FCM push fails.
+   */
+
+  const notification = await prisma.notification.create({
+    data: {
+      userId,
+      title,
+      body,
+      type,
+      data: data ?? {},
+    },
+  });
+
+  /*
+   * Then send push notification.
+   *
+   * Push failure should NOT delete DB notification.
+   */
+
+  try {
+    await sendPushNotification({
+      userId,
+      title,
+      body,
+
+      data: {
+        ...(data ?? {}),
+
+        notificationId: notification.id,
+        type,
+      },
+    });
+  } catch (error) {
+    console.error(
+      '❌ PUSH FAILED BUT NOTIFICATION WAS SAVED:',
+      error,
+    );
+  }
+
+  return notification;
+};
+
+/* =========================================================
+   GET MY NOTIFICATIONS
+========================================================= */
+
+export const getMyNotifications = async (
+  userId: string,
+) => {
+  const notifications = await prisma.notification.findMany({
+    where: {
+      userId,
+    },
+
+    orderBy: {
+      createdAt: 'desc',
+    },
+  });
+
+  const unreadCount = await prisma.notification.count({
+    where: {
+      userId,
+      isRead: false,
+    },
+  });
+
+  return {
+    notifications,
+    unreadCount,
+  };
+};
+/* =========================================================
+   MARK ONE AS READ
+========================================================= */
+
+export const markNotificationAsRead = async (
+  userId: string,
+  notificationId: string,
+) => {
+  const result =
+    await prisma.notification.updateMany({
+      where: {
+        id: notificationId,
+        userId,
+      },
+
+      data: {
+        isRead: true,
+      },
+    });
+
+  if (result.count === 0) {
+    throw new Error('Notification not found');
+  }
+
+  return {
+    success: true,
+  };
+};
+
+/* =========================================================
+   MARK ALL AS READ
+========================================================= */
+
+export const markAllNotificationsAsRead = async (
+  userId: string,
+) => {
+  await prisma.notification.updateMany({
+    where: {
+      userId,
+      isRead: false,
+    },
+
+    data: {
+      isRead: true,
+    },
+  });
+
+  return {
+    success: true,
+  };
+};
+
+/* =========================================================
+   DELETE NOTIFICATION
+========================================================= */
+
+export const deleteNotification = async (
+  userId: string,
+  notificationId: string,
+) => {
+  const result =
+    await prisma.notification.deleteMany({
+      where: {
+        id: notificationId,
+        userId,
+      },
+    });
+
+  if (result.count === 0) {
+    throw new Error('Notification not found');
+  }
+
+  return {
+    success: true,
+  };
+};
+
+/* =========================================================
+   DELETE ALL NOTIFICATIONS
+========================================================= */
+
+export const deleteAllNotifications = async (
+  userId: string,
+) => {
+  await prisma.notification.deleteMany({
+    where: {
+      userId,
+    },
+  });
+
+  return {
+    success: true,
+  };
 };

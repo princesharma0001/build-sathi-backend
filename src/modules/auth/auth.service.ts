@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import { prisma } from "../../config/database";
 import { env } from "../../config/env";
 import { sendOtpEmail } from "../../utils/email";
+import { createNotification } from "../notifications/notification.service";
 
 type Role = "BUYER" | "SELLER";
 
@@ -341,146 +342,6 @@ export const selectRole = async (email: string, role: Role) => {
 //   };
 // };
 
-// export const selectRole = async (
-//   email: string,
-//   role: Role,
-// ) => {
-//   const normalizedEmail = email.trim().toLowerCase();
-
-//   const registration =
-//     await prisma.registrationOtp.findUnique({
-//       where: {
-//         email: normalizedEmail,
-//       },
-//     });
-
-//   if (!registration) {
-//     throw new Error("Registration session not found");
-//   }
-
-//   if (!registration.verified) {
-//     throw new Error("Please verify your email first");
-//   }
-
-//   const existingUser = await prisma.user.findUnique({
-//     where: {
-//       email: normalizedEmail,
-//     },
-//   });
-
-//   if (existingUser) {
-//     throw new Error("User account already exists");
-//   }
-
-//   const result = await prisma.$transaction(async (tx) => {
-//     // 1. Create user
-//     const user = await tx.user.create({
-//       data: {
-//         name: registration.name,
-//         email: registration.email,
-//         passwordHash: registration.passwordHash,
-//         role,
-//       },
-//     });
-
-//     // 2. Give FREE subscription to new SELLER
-//     let subscription = null;
-
-//     if (role === "SELLER") {
-//       const freePlan = await tx.subscriptionPlan.findUnique({
-//         where: {
-//           code: "FREE",
-//         },
-//       });
-
-//       if (!freePlan) {
-//         throw new Error(
-//           "FREE subscription plan not found",
-//         );
-//       }
-
-//       if (!freePlan.isActive) {
-//         throw new Error(
-//           "FREE subscription plan is inactive",
-//         );
-//       }
-
-//       subscription =
-//         await tx.sellerSubscription.create({
-//           data: {
-//             sellerId: user.id,
-//             planId: freePlan.id,
-
-//             quotationsTotal:
-//               freePlan.quotationLimit,
-
-//             quotationsRemaining:
-//               freePlan.quotationLimit,
-
-//             hasTrustedBadge:
-//               freePlan.hasTrustedBadge,
-
-//             status: "ACTIVE",
-
-//             source: "PURCHASE",
-
-//             startsAt: new Date(),
-
-//             expiresAt: null,
-//           },
-
-//           include: {
-//             plan: true,
-//           },
-//         });
-//     }
-
-//     // 3. Delete registration OTP
-//     await tx.registrationOtp.delete({
-//       where: {
-//         email: normalizedEmail,
-//       },
-//     });
-
-//     return {
-//       user,
-//       subscription,
-//     };
-//   });
-
-//   // 4. Create login token
-//   const token = createToken(
-//     result.user.id,
-//     result.user.role,
-//   );
-
-//   return {
-//     user: {
-//       id: result.user.id,
-//       name: result.user.name,
-//       email: result.user.email,
-//       role: result.user.role,
-//       status: result.user.status,
-//     },
-
-//     subscription: result.subscription
-//       ? {
-//           id: result.subscription.id,
-//           plan: result.subscription.plan.name,
-//           planCode: result.subscription.plan.code,
-//           quotationsTotal:
-//             result.subscription.quotationsTotal,
-//           quotationsRemaining:
-//             result.subscription.quotationsRemaining,
-//           hasTrustedBadge:
-//             result.subscription.hasTrustedBadge,
-//           status: result.subscription.status,
-//         }
-//       : null,
-
-//     token,
-//   };
-// };
 
 // LOGIN
 export const loginUser = async (email: string, password: string) => {
@@ -517,6 +378,9 @@ export const loginUser = async (email: string, password: string) => {
     token,
   };
 };
+
+
+
 
 // ============================================
 // FORGOT PASSWORD
