@@ -56,6 +56,9 @@ model User {
   sellerOrders       Order[]              @relation("SellerOrders")
   deviceTokens UserDeviceToken[]
   notifications Notification[]
+  feedbackGiven      Feedback[] @relation("FeedbackGiven")
+  feedbackReceived   Feedback[] @relation("FeedbackReceived")
+
 
   @@index([email])
   @@index([role])
@@ -443,6 +446,7 @@ model Order {
   material Material @relation(fields: [materialId], references: [id], onDelete: Restrict)
 
   deliveryAddress DeliveryAddress @relation(fields: [deliveryAddressId], references: [id], onDelete: Restrict)
+  feedbacks Feedback[]
 
   @@index([buyerId])
   @@index([sellerId])
@@ -491,4 +495,24 @@ model Notification {
 
   @@index([userId, createdAt])
   @@index([userId, isRead])
+}
+
+model Feedback {
+  id         String @id @default(uuid())
+  orderId    String
+  reviewerId String
+  revieweeId String
+
+  rating  Int // 1 to 5
+  comment String?
+  order    Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  reviewer User  @relation("FeedbackGiven", fields: [reviewerId], references: [id], onDelete: Cascade)
+  reviewee User  @relation("FeedbackReceived", fields: [revieweeId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([orderId, reviewerId])
+  @@index([revieweeId, createdAt])
+  @@index([reviewerId])
+
 }

@@ -8,10 +8,7 @@ import {
   markAllNotificationsAsRead,
 } from "./notification.service";
 
-export const registerDeviceToken = async (
-  req: Request,
-  res: Response,
-) => {
+export const registerDeviceToken = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.userId;
 
@@ -22,11 +19,7 @@ export const registerDeviceToken = async (
       });
     }
 
-    const {
-      token,
-      platform,
-      deviceName,
-    } = req.body;
+    const { token, platform, deviceName } = req.body;
 
     if (!token) {
       return res.status(400).json({
@@ -59,10 +52,7 @@ export const registerDeviceToken = async (
   }
 };
 
-export const removeDeviceToken = async (
-  req: Request,
-  res: Response,
-) => {
+export const removeDeviceToken = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.userId;
 
@@ -98,174 +88,159 @@ export const removeDeviceToken = async (
   }
 };
 
-export const sendTestNotification = async (
-    req: Request,
-    res: Response,
-  ) => {
-    try {
-      const senderUserId = (req as any).user?.userId;
-  
-      if (!senderUserId) {
-        return res.status(401).json({
-          success: false,
-          message: "Unauthorized",
-        });
-      }
-  
-      const {
-        userId,
-        title,
-        body,
-      } = req.body;
-  
-      if (!userId) {
-        return res.status(400).json({
-          success: false,
-          message: "userId is required",
-        });
-      }
-  
-      if (!title) {
-        return res.status(400).json({
-          success: false,
-          message: "title is required",
-        });
-      }
-  
-      if (!body) {
-        return res.status(400).json({
-          success: false,
-          message: "body is required",
-        });
-      }
-  
-      const result =
-        await sendPushNotification({
-          userId,
-          title,
-          body,
-          data: {
-            type: "TEST_NOTIFICATION",
-          },
-        });
-  
-      return res.status(200).json({
-        success: true,
-        message:
-          "Test notification sent successfully",
-        data: result,
-      });
-    } catch (error) {
-      console.error(
-        "SEND TEST NOTIFICATION ERROR:",
-        error,
-      );
-  
-      return res.status(500).json({
-        success: false,
-        message:
-          "Failed to send test notification",
-      });
-    }
-  };
+export const sendTestNotification = async (req: Request, res: Response) => {
+  try {
+    const senderUserId = (req as any).user?.userId;
 
-  export const getMyNotificationsController = async (
-    req: Request,
-    res: Response,
-  ) => {
-    try {
-      const userId = (req as any).user?.userId;
-  
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message: 'Unauthorized',
-        });
-      }
-  
-      const result = await getMyNotifications(userId);
-  
-      return res.status(200).json({
-        success: true,
-        message: 'Notifications fetched successfully',
-        data: result,
-      });
-    } catch (error) {
-      console.error(
-        '❌ GET NOTIFICATIONS ERROR:',
-        error,
-      );
-  
-      return res.status(500).json({
+    if (!senderUserId) {
+      return res.status(401).json({
         success: false,
-        message: 'Failed to fetch notifications',
+        message: "Unauthorized",
       });
     }
-  };
 
-  export const markNotificationAsReadController = async (
-    req: Request,
-    res: Response,
-  ) => {
-    try {
-      const userId = (req as any).user?.userId;
-      const {id} = req.params;
-  
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message: 'Unauthorized',
-        });
-      }
-  
-      await markNotificationAsRead(userId, id);
-  
-      return res.status(200).json({
-        success: true,
-        message: 'Notification marked as read',
-      });
-    } catch (error) {
-      console.error(
-        '❌ MARK NOTIFICATION READ ERROR:',
-        error,
-      );
-  
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to mark notification as read',
-      });
-    }
-  };
+    const { userId, title, body } = req.body;
 
-  export const markAllNotificationsAsReadController = async (
-    req: Request,
-    res: Response,
-  ) => {
-    try {
-      const userId = (req as any).user?.userId;
-  
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message: 'Unauthorized',
-        });
-      }
-  
-      await markAllNotificationsAsRead(userId);
-  
-      return res.status(200).json({
-        success: true,
-        message: 'All notifications marked as read',
-      });
-    } catch (error) {
-      console.error(
-        '❌ MARK ALL NOTIFICATIONS ERROR:',
-        error,
-      );
-  
-      return res.status(500).json({
+    if (!userId) {
+      return res.status(400).json({
         success: false,
-        message: 'Failed to mark all notifications as read',
+        message: "userId is required",
       });
     }
-  };
+
+    if (!title) {
+      return res.status(400).json({
+        success: false,
+        message: "title is required",
+      });
+    }
+
+    if (!body) {
+      return res.status(400).json({
+        success: false,
+        message: "body is required",
+      });
+    }
+
+    const result = await sendPushNotification({
+      userId,
+      title,
+      body,
+      data: {
+        type: "TEST_NOTIFICATION",
+      },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Test notification sent successfully",
+      data: result,
+    });
+  } catch (error) {
+    console.error("SEND TEST NOTIFICATION ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to send test notification",
+    });
+  }
+};
+
+export const getMyNotificationsController = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const userId = (req as any).user?.userId;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
+    const result = await getMyNotifications(userId);
+
+    return res.status(200).json({
+      success: true,
+      message: "Notifications fetched successfully",
+      data: result,
+    });
+  } catch (error) {
+    console.error("❌ GET NOTIFICATIONS ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch notifications",
+    });
+  }
+};
+
+export const markNotificationAsReadController = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const userId = (req as any).user?.userId;
+    const { id } = req.params;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
+    if (typeof id !== "string" || !id.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Notification ID is required",
+      });
+    }
+
+    await markNotificationAsRead(userId, id);
+
+    return res.status(200).json({
+      success: true,
+      message: "Notification marked as read",
+    });
+  } catch (error) {
+    console.error("❌ MARK NOTIFICATION READ ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to mark notification as read",
+    });
+  }
+};
+
+export const markAllNotificationsAsReadController = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const userId = (req as any).user?.userId;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
+    await markAllNotificationsAsRead(userId);
+
+    return res.status(200).json({
+      success: true,
+      message: "All notifications marked as read",
+    });
+  } catch (error) {
+    console.error("❌ MARK ALL NOTIFICATIONS ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to mark all notifications as read",
+    });
+  }
+};

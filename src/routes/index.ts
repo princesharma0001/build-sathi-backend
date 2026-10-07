@@ -7,8 +7,8 @@ import requirementRoutes from "../modules/requirement/requirement.routes"
 import sellerRoutes from "../modules/sellers/seller.routes"
 import quoteRoutes from "../modules/quote/quote.routes"
 import subscriptionRoutes from "../modules/subscription/subscription.routes"
-import { getSellerDashboardController } from '../modules/sellers/seller.controller';
-import notificationRoutes from "../modules/notifications/notification.routes"
+import notificationRoutes from "../modules/notifications/notification.routes";
+import feedbackRoutes from "../modules/feedback/feedback.routes";
 const router = Router();
 
 // API root
@@ -36,7 +36,7 @@ router.use(
   sellerRoutes,
 );
 
-router.get('/dashboard', getSellerDashboardController);
+// router.get('/dashboard', getSellerDashboardController);
 router.use("/notifications", notificationRoutes);
 
 router.use(
@@ -50,6 +50,8 @@ router.use(
 router.use('/requirements', requirementRoutes);
 router.use('/quotes', quoteRoutes);
 router.use('/subscriptions', subscriptionRoutes);
+router.use('/feedback', feedbackRoutes);
+
 
 
 export default router;
