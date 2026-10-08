@@ -4,4 +4,5 @@ dist/
 build/
 coverage/
 *.log
-.DS_Store
+.DS_Store.vscode/
+Archive.zip

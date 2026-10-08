@@ -1,4 +1,5 @@
 import { prisma } from "../../config/database";
+import { createNotification, sendPushNotification } from "../notifications/notification.service";
 
 interface CreateSellerBasicProfileData {
   userId: string;
@@ -11,6 +12,15 @@ interface CreateSellerBasicProfileData {
   phone: string;
   email?: string;
   
+}
+
+interface DispatchMaterialInput {
+  quoteId: string;
+  driverName: string;
+  driverPhone: string;
+  vehicleNumber: string;
+  expectedDeliveryDate?: string;
+  deliveryNotes?: string;
 }
 
 // UPDATE SELLER PROFILE
@@ -329,3 +339,992 @@ export const getSellerRequirements = async () => {
   
     return requirement;
   };
+
+
+export const getSellerDashboard = async (sellerId: string) => {
+  const now = new Date();
+
+  // First day of current month
+  const startOfMonth = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    1,
+  );
+
+  // Last day of current month
+  const startOfNextMonth = new Date(
+    now.getFullYear(),
+    now.getMonth() + 1,
+    1,
+  );
+
+  // ==========================================
+  // SELLER PROFILE
+  // ==========================================
+
+  const seller = await prisma.user.findUnique({
+    where: {
+      id: sellerId,
+    },
+
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      role: true,
+      status: true,
+
+      sellerProfile: {
+        select: {
+          ownerName: true,
+          businessName: true,
+          businessType: true,
+          gstRegistered: true,
+          gstNumber: true,
+          panNumber: true,
+          phone: true,
+          email: true,
+        },
+      },
+    },
+  });
+
+  if (!seller) {
+    throw new Error('Seller not found');
+  }
+
+  if (seller.role !== 'SELLER') {
+    throw new Error('User is not a seller');
+  }
+
+  // ==========================================
+  // DASHBOARD COUNTS
+  // ==========================================
+
+  const [
+    totalRequirements,
+    openRequirements,
+    pendingQuotations,
+    acceptedQuotations,
+    rejectedQuotations,
+    activeOrders,
+    completedOrders,
+    cancelledRequirements,
+  ] = await Promise.all([
+    // Total requirements on platform
+    prisma.requirement.count(),
+
+    // Requirements currently available for sellers
+    prisma.requirement.count({
+      where: {
+        status: 'OPEN',
+      },
+    }),
+
+    // Seller's pending quotations
+    prisma.quote.count({
+      where: {
+        sellerId,
+        status: 'PENDING',
+      },
+    }),
+
+    // Seller's accepted quotations
+    prisma.quote.count({
+      where: {
+        sellerId,
+        status: 'ACCEPTED',
+      },
+    }),
+
+    // Seller's rejected quotations
+    prisma.quote.count({
+      where: {
+        sellerId,
+        status: 'REJECTED',
+      },
+    }),
+
+    // Requirements where this seller's quote was accepted
+    // and requirement is currently ORDERED
+    prisma.requirement.count({
+      where: {
+        status: 'ORDERED',
+
+        quotes: {
+          some: {
+            sellerId,
+            status: 'ACCEPTED',
+          },
+        },
+      },
+    }),
+
+    // Completed requirements for this seller
+    prisma.requirement.count({
+      where: {
+        status: 'COMPLETED',
+
+        quotes: {
+          some: {
+            sellerId,
+            status: 'ACCEPTED',
+          },
+        },
+      },
+    }),
+
+    // Cancelled requirements for this seller
+    prisma.requirement.count({
+      where: {
+        status: 'CANCELLED',
+
+        quotes: {
+          some: {
+            sellerId,
+            status: 'ACCEPTED',
+          },
+        },
+      },
+    }),
+  ]);
+
+  // ==========================================
+  // SALES
+  // ==========================================
+
+  const totalSalesResult = await prisma.quote.aggregate({
+    where: {
+      sellerId,
+      status: 'ACCEPTED',
+    },
+
+    _sum: {
+      totalAmount: true,
+    },
+  });
+
+  const thisMonthSalesResult = await prisma.quote.aggregate({
+    where: {
+      sellerId,
+      status: 'ACCEPTED',
+
+      createdAt: {
+        gte: startOfMonth,
+        lt: startOfNextMonth,
+      },
+    },
+
+    _sum: {
+      totalAmount: true,
+    },
+  });
+
+  const totalSales = Number(
+    totalSalesResult._sum.totalAmount || 0,
+  );
+
+  const thisMonthSales = Number(
+    thisMonthSalesResult._sum.totalAmount || 0,
+  );
+
+  // ==========================================
+  // POPULAR MATERIALS
+  // ==========================================
+
+  const popularMaterialsRaw =
+    await prisma.requirement.groupBy({
+      by: ['materialId'],
+
+      _count: {
+        materialId: true,
+      },
+
+      orderBy: {
+        _count: {
+          materialId: 'desc',
+        },
+      },
+
+      take: 5,
+    });
+
+  const popularMaterialIds =
+    popularMaterialsRaw.map(
+      item => item.materialId,
+    );
+
+  const popularMaterialDetails =
+    popularMaterialIds.length
+      ? await prisma.material.findMany({
+          where: {
+            id: {
+              in: popularMaterialIds,
+            },
+          },
+
+          select: {
+            id: true,
+            name: true,
+            unit: true,
+            imageUrl: true,
+
+            category: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        })
+      : [];
+
+  const popularMaterials =
+    popularMaterialsRaw.map(item => {
+      const material =
+        popularMaterialDetails.find(
+          m => m.id === item.materialId,
+        );
+
+      return {
+        id: item.materialId,
+        name: material?.name || 'Unknown Material',
+        unit: material?.unit || null,
+        imageUrl: material?.imageUrl || null,
+        category: material?.category?.name || null,
+        requirementCount:
+          item._count.materialId,
+      };
+    });
+
+  // ==========================================
+  // RECENT REQUIREMENTS
+  // ==========================================
+
+  const recentRequirements =
+    await prisma.requirement.findMany({
+      where: {
+        status: {
+          in: [
+            'OPEN',
+            'QUOTED',
+            'ACCEPTED',
+            'ORDERED',
+          ],
+        },
+      },
+
+      orderBy: {
+        createdAt: 'desc',
+      },
+
+      take: 5,
+
+      select: {
+        id: true,
+        quantity: true,
+        unit: true,
+        deliveryPreference: true,
+        notes: true,
+        status: true,
+        createdAt: true,
+
+        material: {
+          select: {
+            id: true,
+            name: true,
+            unit: true,
+
+            category: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+
+        buyer: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+
+            buyerProfile: {
+              select: {
+                phoneNumber: true,
+                companyName: true,
+                state: true,
+                city: true,
+              },
+            },
+          },
+        },
+
+        deliveryAddress: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            addressLine1: true,
+            addressLine2: true,
+            landmark: true,
+            city: true,
+            state: true,
+            pincode: true,
+          },
+        },
+
+        quotes: {
+          where: {
+            sellerId,
+          },
+
+          select: {
+            id: true,
+            status: true,
+            totalAmount: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+
+  // ==========================================
+  // SELLER QUOTATION SUMMARY
+  // ==========================================
+
+  const totalQuotes = await prisma.quote.count({
+    where: {
+      sellerId,
+    },
+  });
+
+  const responseRate =
+    totalQuotes > 0
+      ? Math.round(
+          ((totalQuotes -
+            rejectedQuotations) /
+            totalQuotes) *
+            100,
+        )
+      : 0;
+
+  // ==========================================
+  // QUOTA
+  // ==========================================
+
+  const activeSubscription =
+    await prisma.sellerSubscription.findFirst({
+      where: {
+        sellerId,
+        status: 'ACTIVE',
+
+        OR: [
+          {
+            expiresAt: null,
+          },
+          {
+            expiresAt: {
+              gt: now,
+            },
+          },
+        ],
+      },
+
+      orderBy: {
+        createdAt: 'desc',
+      },
+
+      select: {
+        id: true,
+        quotationsTotal: true,
+        quotationsRemaining: true,
+        hasTrustedBadge: true,
+        startsAt: true,
+        expiresAt: true,
+
+        plan: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            quotationLimit: true,
+          },
+        },
+      },
+    });
+
+  // ==========================================
+  // FINAL RESPONSE
+  // ==========================================
+
+  return {
+    seller: {
+      id: seller.id,
+      name: seller.name,
+      email: seller.email,
+      phone: seller.phone,
+
+      status: seller.status,
+
+      profile: seller.sellerProfile,
+    },
+
+    stats: {
+      totalRequirements,
+      openRequirements,
+
+      pendingQuotations,
+      acceptedQuotations,
+      rejectedQuotations,
+
+      activeOrders,
+      completedOrders,
+      cancelledOrders: cancelledRequirements,
+
+      totalSales,
+      thisMonthSales,
+
+      responseRate: `${responseRate}%`,
+    },
+
+    popularMaterials,
+
+    recentRequirements: recentRequirements.map(
+      requirement => ({
+        id: requirement.id,
+
+        material: requirement.material,
+
+        quantity: Number(
+          requirement.quantity,
+        ),
+
+        unit: requirement.unit,
+
+        deliveryPreference:
+          requirement.deliveryPreference,
+
+        notes: requirement.notes,
+
+        status: requirement.status,
+
+        createdAt: requirement.createdAt,
+
+        buyer: {
+          id: requirement.buyer.id,
+          name: requirement.buyer.name,
+          phone:
+            requirement.buyer
+              .buyerProfile?.phoneNumber ||
+            requirement.buyer.phone,
+
+          companyName:
+            requirement.buyer
+              .buyerProfile?.companyName,
+
+          city:
+            requirement.buyer
+              .buyerProfile?.city,
+
+          state:
+            requirement.buyer
+              .buyerProfile?.state,
+        },
+
+        deliveryAddress:
+          requirement.deliveryAddress,
+
+        sellerQuote:
+          requirement.quotes[0] || null,
+      }),
+    ),
+
+    subscription: activeSubscription
+      ? {
+          id: activeSubscription.id,
+          plan: activeSubscription.plan,
+          quotationsTotal:
+            activeSubscription.quotationsTotal,
+          quotationsRemaining:
+            activeSubscription.quotationsRemaining,
+          hasTrustedBadge:
+            activeSubscription.hasTrustedBadge,
+          startsAt:
+            activeSubscription.startsAt,
+          expiresAt:
+            activeSubscription.expiresAt,
+        }
+      : null,
+  };
+};
+
+
+
+export const dispatchMaterial = async (
+  sellerId: string,
+  data: DispatchMaterialInput,
+) => {
+  const {
+    quoteId,
+    driverName,
+    driverPhone,
+    vehicleNumber,
+    expectedDeliveryDate,
+    deliveryNotes,
+  } = data;
+
+  // 1. Validate required fields
+  if (
+    !quoteId ||
+    !driverName ||
+    !driverPhone ||
+    !vehicleNumber
+  ) {
+    const error: any = new Error(
+      'quoteId, driverName, driverPhone and vehicleNumber are required',
+    );
+
+    error.statusCode = 400;
+    throw error;
+  }
+
+  // 2. Find accepted quote
+  const quote = await prisma.quote.findFirst({
+    where: {
+      id: quoteId,
+      sellerId,
+      status: 'ACCEPTED',
+    },
+
+    include: {
+      requirement: {
+        include: {
+          material: {
+            include: {
+              category: true,
+            },
+          },
+
+          deliveryAddress: true,
+
+          buyer: true,
+        },
+      },
+    },
+  });
+
+  if (!quote) {
+    const error: any = new Error(
+      'Accepted quotation not found',
+    );
+
+    error.statusCode = 404;
+    throw error;
+  }
+
+  // 3. Check if order already exists
+  const existingOrder = await prisma.order.findUnique({
+    where: {
+      quoteId: quote.id,
+    },
+  });
+
+  if (existingOrder) {
+    const error: any = new Error(
+      'Order has already been created for this quotation',
+    );
+
+    error.statusCode = 409;
+    throw error;
+  }
+
+  // 4. Generate order number
+  const orderNumber = `BS-${Date.now()}`;
+
+  // 5. Create Order + update requirement + update quote
+  const order = await prisma.$transaction(async tx => {
+    const createdOrder = await tx.order.create({
+      data: {
+        orderNumber,
+
+        requirementId: quote.requirementId,
+        quoteId: quote.id,
+
+        buyerId: quote.requirement.buyerId,
+        sellerId: quote.sellerId,
+
+        materialId: quote.requirement.materialId,
+
+        quantity: quote.requirement.quantity,
+        unit: quote.requirement.unit,
+
+        pricePerUnit: quote.pricePerUnit,
+        materialAmount: quote.materialAmount,
+        deliveryCharges: quote.deliveryCharges,
+        totalAmount: quote.totalAmount,
+
+        deliveryAddressId:
+          quote.requirement.deliveryAddressId,
+
+        driverName,
+        driverPhone,
+        vehicleNumber,
+
+        dispatchDate: new Date(),
+
+        expectedDeliveryDate: expectedDeliveryDate
+          ? new Date(expectedDeliveryDate)
+          : null,
+
+        deliveryNotes: deliveryNotes || null,
+
+        status: 'DISPATCHED',
+      },
+
+      include: {
+        material: true,
+
+        deliveryAddress: true,
+
+        buyer: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+          },
+        },
+
+        seller: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+          },
+        },
+      },
+    });
+
+    // Requirement → ORDERED
+    await tx.requirement.update({
+      where: {
+        id: quote.requirementId,
+      },
+
+      data: {
+        status: 'ORDERED',
+      },
+    });
+
+    // Quote → DISPATCHED
+    await tx.quote.update({
+      where: {
+        id: quote.id,
+      },
+
+      data: {
+        status: 'DISPATCHED',
+      },
+    });
+
+    return createdOrder;
+  });
+
+  // --------------------------------------------------
+  // PUSH NOTIFICATION → BUYER
+  // --------------------------------------------------
+
+  try {
+    const buyerId = order.buyerId;
+
+    if (buyerId) {
+      const materialName =
+        order.material?.name || 'your material';
+
+      const deliveryDate =
+        order.expectedDeliveryDate
+          ? new Date(
+              order.expectedDeliveryDate,
+            ).toLocaleDateString('en-IN')
+          : null;
+          await createNotification({
+            userId: buyerId,
+            title: 'Order Dispatched 🚚',
+            body: deliveryDate
+              ? `${materialName} has been dispatched. Expected delivery: ${deliveryDate}.`
+              : `${materialName} has been dispatched and is on the way.`,
+          
+            type: 'ORDER_DISPATCHED',
+          
+            data: {
+              orderId: order.id,
+              orderNumber: order.orderNumber,
+              quoteId: order.quoteId,
+              requirementId: order.requirementId,
+              screen: 'OrderDetails',
+            },
+          });
+
+      // await sendPushNotification({
+      //   userId: buyerId,
+
+      //   title: 'Order Dispatched 🚚',
+
+      //   body: deliveryDate
+      //     ? `${materialName} has been dispatched. Expected delivery: ${deliveryDate}.`
+      //     : `${materialName} has been dispatched and is on the way.`,
+
+      //   data: {
+      //     type: 'ORDER_DISPATCHED',
+
+      //     orderId: order.id,
+
+      //     orderNumber: order.orderNumber,
+
+      //     quoteId: order.quoteId,
+
+      //     requirementId: order.requirementId,
+
+      //     screen: 'OrderDetails',
+      //   },
+      // });
+    }
+  } catch (error) {
+    // Push notification failure should NOT fail dispatch
+    console.error(
+      '❌ Failed to send order dispatch notification:',
+      error,
+    );
+  }
+
+  return order;
+};
+
+// export const dispatchMaterial = async (
+//   sellerId: string,
+//   data: DispatchMaterialInput,
+// ) => {
+//   const {
+//     quoteId,
+//     driverName,
+//     driverPhone,
+//     vehicleNumber,
+//     expectedDeliveryDate,
+//     deliveryNotes,
+//   } = data;
+
+//   // 1. Validate required fields
+//   if (
+//     !quoteId ||
+//     !driverName ||
+//     !driverPhone ||
+//     !vehicleNumber
+//   ) {
+//     const error: any = new Error(
+//       "quoteId, driverName, driverPhone and vehicleNumber are required",
+//     );
+//     error.statusCode = 400;
+//     throw error;
+//   }
+
+//   // 2. Find accepted quote
+//   const quote = await prisma.quote.findFirst({
+//     where: {
+//       id: quoteId,
+//       sellerId,
+//       status: "ACCEPTED",
+//     },
+//     include: {
+//       requirement: {
+//         include: {
+//           material: {
+//             include: {
+//               category: true,
+//             },
+//           },
+//           deliveryAddress: true,
+//           buyer: true,
+//         },
+//       },
+//     },
+//   });
+
+//   if (!quote) {
+//     const error: any = new Error(
+//       "Accepted quotation not found",
+//     );
+//     error.statusCode = 404;
+//     throw error;
+//   }
+
+//   // 3. Check if order already exists
+//   const existingOrder = await prisma.order.findUnique({
+//     where: {
+//       quoteId: quote.id,
+//     },
+//   });
+
+//   if (existingOrder) {
+//     const error: any = new Error(
+//       "Order has already been created for this quotation",
+//     );
+//     error.statusCode = 409;
+//     throw error;
+//   }
+
+//   // 4. Generate order number
+//   const orderNumber = `BS-${Date.now()}`;
+
+//   // 5. Create Order + update requirement + update quote
+//   const order = await prisma.$transaction(async (tx) => {
+//     const createdOrder = await tx.order.create({
+//       data: {
+//         orderNumber,
+
+//         requirementId: quote.requirementId,
+//         quoteId: quote.id,
+
+//         buyerId: quote.requirement.buyerId,
+//         sellerId: quote.sellerId,
+
+//         materialId: quote.requirement.materialId,
+
+//         quantity: quote.requirement.quantity,
+//         unit: quote.requirement.unit,
+
+//         pricePerUnit: quote.pricePerUnit,
+//         materialAmount: quote.materialAmount,
+//         deliveryCharges: quote.deliveryCharges,
+//         totalAmount: quote.totalAmount,
+
+//         deliveryAddressId: quote.requirement.deliveryAddressId,
+
+//         driverName,
+//         driverPhone,
+//         vehicleNumber,
+
+//         dispatchDate: new Date(),
+
+//         expectedDeliveryDate: expectedDeliveryDate
+//           ? new Date(expectedDeliveryDate)
+//           : null,
+
+//         deliveryNotes: deliveryNotes || null,
+
+//         status: "DISPATCHED",
+//       },
+
+//       include: {
+//         material: true,
+
+//         deliveryAddress: true,
+
+//         buyer: {
+//           select: {
+//             id: true,
+//             name: true,
+//             email: true,
+//             phone: true,
+//           },
+//         },
+
+//         seller: {
+//           select: {
+//             id: true,
+//             name: true,
+//             email: true,
+//             phone: true,
+//           },
+//         },
+//       },
+//     });
+
+//     // Requirement → ORDERED
+//     await tx.requirement.update({
+//       where: {
+//         id: quote.requirementId,
+//       },
+//       data: {
+//         status: "ORDERED",
+//       },
+//     });
+
+//     // ⭐ Quote → DISPATCHED
+//     await tx.quote.update({
+//       where: {
+//         id: quote.id,
+//       },
+//       data: {
+//         status: "DISPATCHED",
+//       },
+//     });
+
+//     return createdOrder;
+//   });
+
+//   return order;
+// };
+
+export const getSellerOrders = async (sellerId: string) => {
+  const orders = await prisma.order.findMany({
+    where: {
+      sellerId,
+    },
+
+    include: {
+      material: {
+        select: {
+          id: true,
+          name: true,
+          unit: true,
+          imageUrl: true,
+        },
+      },
+
+      buyer: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+
+          buyerProfile: {
+            select: {
+              companyName: true,
+              phoneNumber: true,
+              state: true,
+              city: true,
+              pincode: true,
+              completeAddress: true,
+            },
+          },
+        },
+      },
+
+      deliveryAddress: true,
+
+      quote: {
+        select: {
+          id: true,
+          pricePerUnit: true,
+          materialAmount: true,
+          deliveryCharges: true,
+          totalAmount: true,
+          deliveryTime: true,
+          validity: true,
+          status: true,
+        },
+      },
+    },
+
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  return orders;
+};

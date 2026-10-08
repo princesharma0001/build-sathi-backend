@@ -1,4 +1,4 @@
-import {Request, Response} from 'express';
+import { Request, Response } from "express";
 
 import {
   createCategory,
@@ -11,23 +11,20 @@ import {
   toggleMaterialStatus,
   updateCategory,
   updateMaterial,
-} from './material.service';
+} from "./material.service";
 
 // ==========================================
 // CATEGORY
 // ==========================================
 
-export const addCategory = async (
-  req: Request,
-  res: Response,
-) => {
+export const addCategory = async (req: Request, res: Response) => {
   try {
-    const {name, description} = req.body || {};
+    const { name, description } = req.body || {};
 
     if (!name?.trim()) {
       return res.status(400).json({
         success: false,
-        message: 'Category name is required',
+        message: "Category name is required",
       });
     }
 
@@ -38,7 +35,7 @@ export const addCategory = async (
 
     return res.status(201).json({
       success: true,
-      message: 'Category created successfully',
+      message: "Category created successfully",
       data: {
         category,
       },
@@ -47,23 +44,16 @@ export const addCategory = async (
     return res.status(400).json({
       success: false,
       message:
-        error instanceof Error
-          ? error.message
-          : 'Unable to create category',
+        error instanceof Error ? error.message : "Unable to create category",
     });
   }
 };
 
-export const listCategories = async (
-  req: Request,
-  res: Response,
-) => {
+export const listCategories = async (req: Request, res: Response) => {
   try {
-    const includeInactive =
-      req.query.includeInactive === 'true';
+    const includeInactive = req.query.includeInactive === "true";
 
-    const categories =
-      await getCategories(includeInactive);
+    const categories = await getCategories(includeInactive);
 
     return res.status(200).json({
       success: true,
@@ -74,35 +64,34 @@ export const listCategories = async (
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: 'Unable to get categories',
+      message: "Unable to get categories",
     });
   }
 };
 
-export const editCategory = async (
-  req: Request,
-  res: Response,
-) => {
+export const editCategory = async (req: Request, res: Response) => {
   try {
-    const {id} = req.params;
-    const {name, description, isActive} =
-      req.body || {};
+    const { id } = req.params;
+    const { name, description, isActive } = req.body || {};
+
+    if (typeof id !== "string" || !id.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Category ID is required",
+      });
+    }
 
     const category = await updateCategory(id, {
-      ...(name !== undefined
-        ? {name: name.trim()}
-        : {}),
+      ...(name !== undefined ? { name: name.trim() } : {}),
       ...(description !== undefined
-        ? {description: description?.trim()}
+        ? { description: description?.trim() }
         : {}),
-      ...(isActive !== undefined
-        ? {isActive}
-        : {}),
+      ...(isActive !== undefined ? { isActive } : {}),
     });
 
     return res.status(200).json({
       success: true,
-      message: 'Category updated successfully',
+      message: "Category updated successfully",
       data: {
         category,
       },
@@ -111,9 +100,7 @@ export const editCategory = async (
     return res.status(400).json({
       success: false,
       message:
-        error instanceof Error
-          ? error.message
-          : 'Unable to update category',
+        error instanceof Error ? error.message : "Unable to update category",
     });
   }
 };
@@ -122,28 +109,14 @@ export const editCategory = async (
 // ADMIN MATERIAL
 // ==========================================
 
-export const addMaterial = async (
-  req: Request,
-  res: Response,
-) => {
+export const addMaterial = async (req: Request, res: Response) => {
   try {
-    const {
-      categoryId,
-      name,
-      description,
-      unit,
-      imageUrl,
-    } = req.body || {};
+    const { categoryId, name, description, unit, imageUrl } = req.body || {};
 
-    if (
-      !categoryId ||
-      !name ||
-      !unit
-    ) {
+    if (!categoryId || !name || !unit) {
       return res.status(400).json({
         success: false,
-        message:
-          'Category, material name and unit are required',
+        message: "Category, material name and unit are required",
       });
     }
 
@@ -157,7 +130,7 @@ export const addMaterial = async (
 
     return res.status(201).json({
       success: true,
-      message: 'Material created successfully',
+      message: "Material created successfully",
       data: {
         material,
       },
@@ -166,20 +139,14 @@ export const addMaterial = async (
     return res.status(400).json({
       success: false,
       message:
-        error instanceof Error
-          ? error.message
-          : 'Unable to create material',
+        error instanceof Error ? error.message : "Unable to create material",
     });
   }
 };
 
-export const listAdminMaterials = async (
-  req: Request,
-  res: Response,
-) => {
+export const listAdminMaterials = async (req: Request, res: Response) => {
   try {
-    const materials =
-      await getAdminMaterials();
+    const materials = await getAdminMaterials();
 
     return res.status(200).json({
       success: true,
@@ -190,7 +157,7 @@ export const listAdminMaterials = async (
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: 'Unable to get materials',
+      message: "Unable to get materials",
     });
   }
 };
@@ -199,18 +166,14 @@ export const listAdminMaterials = async (
 // BUYER MATERIAL
 // ==========================================
 
-export const listBuyerMaterials = async (
-  req: Request,
-  res: Response,
-) => {
+export const listBuyerMaterials = async (req: Request, res: Response) => {
   try {
     const categoryId =
-      typeof req.query.categoryId === 'string'
+      typeof req.query.categoryId === "string"
         ? req.query.categoryId
         : undefined;
 
-    const materials =
-      await getActiveMaterials(categoryId);
+    const materials = await getActiveMaterials(categoryId);
 
     return res.status(200).json({
       success: true,
@@ -221,19 +184,23 @@ export const listBuyerMaterials = async (
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: 'Unable to get materials',
+      message: "Unable to get materials",
     });
   }
 };
 
-export const getMaterial = async (
-  req: Request,
-  res: Response,
-) => {
+export const getMaterial = async (req: Request, res: Response) => {
   try {
-    const material = await getMaterialById(
-      req.params.id,
-    );
+    const { id } = req.params;
+
+    if (typeof id !== "string" || !id.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Material ID is required",
+      });
+    }
+
+    const material = await getMaterialById(id);
 
     return res.status(200).json({
       success: true,
@@ -244,10 +211,7 @@ export const getMaterial = async (
   } catch (error) {
     return res.status(404).json({
       success: false,
-      message:
-        error instanceof Error
-          ? error.message
-          : 'Material not found',
+      message: error instanceof Error ? error.message : "Material not found",
     });
   }
 };
@@ -256,48 +220,34 @@ export const getMaterial = async (
 // UPDATE / DELETE
 // ==========================================
 
-export const editMaterial = async (
-  req: Request,
-  res: Response,
-) => {
+export const editMaterial = async (req: Request, res: Response) => {
   try {
-    const {
-      categoryId,
-      name,
-      description,
-      unit,
-      imageUrl,
-      isActive,
-    } = req.body || {};
+    const { id } = req.params;
 
-    const material =
-      await updateMaterial(
-        req.params.id,
-        {
-          ...(categoryId !== undefined
-            ? {categoryId}
-            : {}),
-          ...(name !== undefined
-            ? {name: name.trim()}
-            : {}),
-          ...(description !== undefined
-            ? {description: description?.trim()}
-            : {}),
-          ...(unit !== undefined
-            ? {unit: unit.trim()}
-            : {}),
-          ...(imageUrl !== undefined
-            ? {imageUrl: imageUrl?.trim()}
-            : {}),
-          ...(isActive !== undefined
-            ? {isActive}
-            : {}),
-        },
-      );
+    if (typeof id !== "string" || !id.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Material ID is required",
+      });
+    }
+
+    const { categoryId, name, description, unit, imageUrl, isActive } =
+      req.body || {};
+
+    const material = await updateMaterial(id, {
+      ...(categoryId !== undefined ? { categoryId } : {}),
+      ...(name !== undefined ? { name: name.trim() } : {}),
+      ...(description !== undefined
+        ? { description: description?.trim() }
+        : {}),
+      ...(unit !== undefined ? { unit: unit.trim() } : {}),
+      ...(imageUrl !== undefined ? { imageUrl: imageUrl?.trim() } : {}),
+      ...(isActive !== undefined ? { isActive } : {}),
+    });
 
     return res.status(200).json({
       success: true,
-      message: 'Material updated successfully',
+      message: "Material updated successfully",
       data: {
         material,
       },
@@ -306,23 +256,55 @@ export const editMaterial = async (
     return res.status(400).json({
       success: false,
       message:
-        error instanceof Error
-          ? error.message
-          : 'Unable to update material',
+        error instanceof Error ? error.message : "Unable to update material",
     });
   }
 };
 
-export const removeMaterial = async (
-  req: Request,
-  res: Response,
-) => {
+export const removeMaterial = async (req: Request, res: Response) => {
   try {
-    await deleteMaterial(req.params.id);
+    const { id } = req.params;
+
+    if (typeof id !== "string" || !id.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Material ID is required",
+      });
+    }
+
+    await deleteMaterial(id);
 
     return res.status(200).json({
       success: true,
-      message: 'Material disabled successfully',
+      message: "Material disabled successfully",
+    });
+  } catch (error) {
+    return res.status(404).json({
+      success: false,
+      message:
+        error instanceof Error ? error.message : "Unable to delete material",
+    });
+  }
+};
+
+export const changeMaterialStatus = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    if (typeof id !== "string" || !id.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Material ID is required",
+      });
+    }
+
+    const material = await toggleMaterialStatus(id);
+    return res.status(200).json({
+      success: true,
+      message: "Material status updated successfully",
+      data: {
+        material,
+      },
     });
   } catch (error) {
     return res.status(404).json({
@@ -330,37 +312,7 @@ export const removeMaterial = async (
       message:
         error instanceof Error
           ? error.message
-          : 'Unable to delete material',
+          : "Unable to update material status",
     });
   }
 };
-
-export const changeMaterialStatus =
-  async (
-    req: Request,
-    res: Response,
-  ) => {
-    try {
-      const material =
-        await toggleMaterialStatus(
-          req.params.id,
-        );
-
-      return res.status(200).json({
-        success: true,
-        message:
-          'Material status updated successfully',
-        data: {
-          material,
-        },
-      });
-    } catch (error) {
-      return res.status(404).json({
-        success: false,
-        message:
-          error instanceof Error
-            ? error.message
-            : 'Unable to update material status',
-      });
-    }
-  };

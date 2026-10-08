@@ -1,48 +1,44 @@
-import {Router} from 'express';
+import { Router } from "express";
 
-import {authMiddleware} from '../../middleware/auth.middleware';
+import { authMiddleware } from "../../middleware/auth.middleware";
 
 import {
   createSellerBasicProfileController,
+  dispatchMaterialController,
+  getSellerDashboardController,
+  getSellerOrdersController,
   getSellerProfileController,
   getSellerRequirementByIdController,
   getSellerRequirementsController,
   updateSellerProfileController,
-} from './seller.controller';
+} from "./seller.controller";
 
 const router = Router();
 
+router.get("/orders", authMiddleware, getSellerOrdersController);
+
+router.get("/dashboard", authMiddleware, getSellerDashboardController);
+
+router.post("/orders/dispatch", authMiddleware, dispatchMaterialController);
 // CREATE BASIC SELLER PROFILE
 router.post(
-    '/profile/basic',
-    authMiddleware,
-    createSellerBasicProfileController,
-  );
-  
-  // GET SELLER PROFILE
-  router.get(
-    '/profile',
-    authMiddleware,
-    getSellerProfileController,
-  );
-  
-  // EDIT SELLER PROFILE
-  router.put(
-    '/profile',
-    authMiddleware,
-    updateSellerProfileController,
-  );
+  "/profile/basic",
+  authMiddleware,
+  createSellerBasicProfileController
+);
 
-  router.get(
-    '/requirements',
-    authMiddleware,
-    getSellerRequirementsController,
-  );
+// GET SELLER PROFILE
+router.get("/profile", authMiddleware, getSellerProfileController);
 
-  router.get(
-    '/requirements/:id',
-    authMiddleware,
-    getSellerRequirementByIdController,
-  );
+// EDIT SELLER PROFILE
+router.put("/profile", authMiddleware, updateSellerProfileController);
+
+router.get("/requirements", authMiddleware, getSellerRequirementsController);
+
+router.get(
+  "/requirements/:id",
+  authMiddleware,
+  getSellerRequirementByIdController
+);
 
 export default router;
