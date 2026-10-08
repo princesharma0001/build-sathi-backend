@@ -1,14 +1,31 @@
-import app from './app';
+// import app from './app';
+// import "dotenv/config";
+// import "./config/firebase";
+// const PORT = process.env.PORT || 5000;
+
+
+
+
+
+// app.listen(PORT, () => {
+//   console.log('🚀 NeevSathi Backend Started');
+//   console.log(`Server: http://localhost:${PORT}`);
+//   console.log(`Health: http://localhost:${PORT}/health`);
+// });
+
 import "dotenv/config";
 import "./config/firebase";
+
+import app from "./app";
+
 const PORT = process.env.PORT || 5000;
 
+if (process.env.NODE_ENV !== "production") {
+  app.listen(PORT, () => {
+    console.log("🚀 NeevSathi Backend Started");
+    console.log(`Server: http://localhost:${PORT}`);
+    console.log(`Health: http://localhost:${PORT}/health`);
+  });
+}
 
-
-
-
-app.listen(PORT, () => {
-  console.log('🚀 NeevSathi Backend Started');
-  console.log(`Server: http://localhost:${PORT}`);
-  console.log(`Health: http://localhost:${PORT}/health`);
-});
+export default app;
