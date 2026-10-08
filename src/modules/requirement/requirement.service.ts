@@ -112,7 +112,7 @@ export const createRequirement = async (data: CreateRequirementData) => {
           data: {
             requirementId: requirement.id,
             materialId,
-            screen: 'SellerRequirements',
+            screen: 'SellerRequirementDetails',
           },
         }),
       ),
