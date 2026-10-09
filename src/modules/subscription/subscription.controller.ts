@@ -1,16 +1,16 @@
-import {Request, Response} from 'express';
+import { Request, Response } from "express";
 
-import {AuthRequest} from '../../middleware/auth.middleware';
+import { AuthRequest } from "../../middleware/auth.middleware";
 
-import {cashfreeConfig} from '../../config/cashfree';
-import {verifyWebhookSignature} from './cashfree.client';
+import { cashfreeConfig } from "../../config/cashfree";
+import { verifyWebhookSignature } from "./cashfree.client";
 import {
   createPurchaseOrder,
   getSellerOrder,
   listSellerOrders,
   simulateSandboxPayment,
   syncOrderWithCashfree,
-} from './subscription.payment';
+} from "./subscription.payment";
 
 import {
   PlanInput,
@@ -20,7 +20,7 @@ import {
   getQuotaSummary,
   listPlans,
   updatePlan,
-} from './subscription.service';
+} from "./subscription.service";
 
 /* -------------------------
    Validation
@@ -31,51 +31,59 @@ const isPositiveInt = (v: unknown) => Number.isInteger(v) && (v as number) > 0;
 const validatePlanBody = (body: any, partial: boolean): string | null => {
   const has = (k: string) => body[k] !== undefined;
 
-  if (!partial || has('code')) {
-    if (typeof body.code !== 'string' || !/^[A-Z][A-Z0-9_]{1,29}$/.test(body.code)) {
-      return 'Plan code is required (uppercase letters, numbers, underscore), e.g. STANDARD';
+  if (!partial || has("code")) {
+    if (
+      typeof body.code !== "string" ||
+      !/^[A-Z][A-Z0-9_]{1,29}$/.test(body.code)
+    ) {
+      return "Plan code is required (uppercase letters, numbers, underscore), e.g. STANDARD";
     }
   }
 
-  if (!partial || has('name')) {
-    if (typeof body.name !== 'string' || !body.name.trim()) {
-      return 'Plan name is required';
+  if (!partial || has("name")) {
+    if (typeof body.name !== "string" || !body.name.trim()) {
+      return "Plan name is required";
     }
   }
 
-  if (!partial || has('price')) {
-    if (typeof body.price !== 'number' || body.price < 0) {
-      return 'Price must be a number, 0 or more';
+  if (!partial || has("price")) {
+    if (typeof body.price !== "number" || body.price < 0) {
+      return "Price must be a number, 0 or more";
     }
   }
 
-  if (!partial || has('quotationLimit')) {
+  if (!partial || has("quotationLimit")) {
     if (!isPositiveInt(body.quotationLimit)) {
-      return 'quotationLimit must be a whole number greater than 0';
+      return "quotationLimit must be a whole number greater than 0";
     }
-  }
-
-  if (has('validityDays') && body.validityDays !== null && !isPositiveInt(body.validityDays)) {
-    return 'validityDays must be a whole number greater than 0, or null for no expiry';
-  }
-
-  if (has('hasTrustedBadge') && typeof body.hasTrustedBadge !== 'boolean') {
-    return 'hasTrustedBadge must be true or false';
-  }
-
-  if (has('isActive') && typeof body.isActive !== 'boolean') {
-    return 'isActive must be true or false';
-  }
-
-  if (has('sortOrder') && !Number.isInteger(body.sortOrder)) {
-    return 'sortOrder must be a whole number';
   }
 
   if (
-    has('features') &&
-    (!Array.isArray(body.features) || body.features.some((f: unknown) => typeof f !== 'string'))
+    has("validityDays") &&
+    body.validityDays !== null &&
+    !isPositiveInt(body.validityDays)
   ) {
-    return 'features must be an array of strings';
+    return "validityDays must be a whole number greater than 0, or null for no expiry";
+  }
+
+  if (has("hasTrustedBadge") && typeof body.hasTrustedBadge !== "boolean") {
+    return "hasTrustedBadge must be true or false";
+  }
+
+  if (has("isActive") && typeof body.isActive !== "boolean") {
+    return "isActive must be true or false";
+  }
+
+  if (has("sortOrder") && !Number.isInteger(body.sortOrder)) {
+    return "sortOrder must be a whole number";
+  }
+
+  if (
+    has("features") &&
+    (!Array.isArray(body.features) ||
+      body.features.some((f: unknown) => typeof f !== "string"))
+  ) {
+    return "features must be an array of strings";
   }
 
   return null;
@@ -86,11 +94,14 @@ const pickPlanFields = (body: any): Partial<PlanInput> => {
 
   if (body.code !== undefined) out.code = body.code;
   if (body.name !== undefined) out.name = body.name.trim();
-  if (body.description !== undefined) out.description = body.description?.trim() || null;
+  if (body.description !== undefined)
+    out.description = body.description?.trim() || null;
   if (body.price !== undefined) out.price = body.price;
-  if (body.quotationLimit !== undefined) out.quotationLimit = body.quotationLimit;
+  if (body.quotationLimit !== undefined)
+    out.quotationLimit = body.quotationLimit;
   if (body.validityDays !== undefined) out.validityDays = body.validityDays;
-  if (body.hasTrustedBadge !== undefined) out.hasTrustedBadge = body.hasTrustedBadge;
+  if (body.hasTrustedBadge !== undefined)
+    out.hasTrustedBadge = body.hasTrustedBadge;
   if (body.features !== undefined) out.features = body.features;
   if (body.sortOrder !== undefined) out.sortOrder = body.sortOrder;
   if (body.isActive !== undefined) out.isActive = body.isActive;
@@ -109,15 +120,15 @@ export const getPlansController = async (_req: Request, res: Response) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Subscription plans fetched successfully',
-      data: {plans},
+      message: "Subscription plans fetched successfully",
+      data: { plans },
     });
   } catch (error: any) {
-    console.error('GET PLANS ERROR:', error);
+    console.error("GET PLANS ERROR:", error);
 
     return res.status(500).json({
       success: false,
-      message: error?.message || 'Unable to fetch subscription plans',
+      message: error?.message || "Unable to fetch subscription plans",
     });
   }
 };
@@ -129,12 +140,12 @@ export const getPlanController = async (req: Request, res: Response) => {
 
     return res.status(200).json({
       success: true,
-      data: {plan},
+      data: { plan },
     });
   } catch (error: any) {
     return res.status(404).json({
       success: false,
-      message: error?.message || 'Subscription plan not found',
+      message: error?.message || "Subscription plan not found",
     });
   }
 };
@@ -142,28 +153,28 @@ export const getPlanController = async (req: Request, res: Response) => {
 // GET /subscriptions/me  (SELLER)
 export const getMySubscriptionController = async (
   req: AuthRequest,
-  res: Response,
+  res: Response
 ) => {
   try {
     const sellerId = req.user?.userId;
 
     if (!sellerId) {
-      return res.status(401).json({success: false, message: 'Unauthorized'});
+      return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
     const summary = await getQuotaSummary(sellerId);
 
     return res.status(200).json({
       success: true,
-      message: 'Subscription status fetched successfully',
+      message: "Subscription status fetched successfully",
       data: summary,
     });
   } catch (error: any) {
-    console.error('GET MY SUBSCRIPTION ERROR:', error);
+    console.error("GET MY SUBSCRIPTION ERROR:", error);
 
     return res.status(400).json({
       success: false,
-      message: error?.message || 'Unable to fetch subscription status',
+      message: error?.message || "Unable to fetch subscription status",
     });
   }
 };
@@ -175,19 +186,19 @@ export const getMySubscriptionController = async (
 // GET /subscriptions/admin/plans  (includes inactive plans)
 export const adminListPlansController = async (
   _req: Request,
-  res: Response,
+  res: Response
 ) => {
   try {
     const plans = await listPlans(true);
 
     return res.status(200).json({
       success: true,
-      data: {plans},
+      data: { plans },
     });
   } catch (error: any) {
     return res.status(500).json({
       success: false,
-      message: error?.message || 'Unable to fetch subscription plans',
+      message: error?.message || "Unable to fetch subscription plans",
     });
   }
 };
@@ -199,7 +210,7 @@ export const createPlanController = async (req: Request, res: Response) => {
     const problem = validatePlanBody(body, false);
 
     if (problem) {
-      return res.status(400).json({success: false, message: problem});
+      return res.status(400).json({ success: false, message: problem });
     }
 
     const plan = await createPlan({
@@ -209,13 +220,13 @@ export const createPlanController = async (req: Request, res: Response) => {
 
     return res.status(201).json({
       success: true,
-      message: 'Subscription plan created successfully',
-      data: {plan},
+      message: "Subscription plan created successfully",
+      data: { plan },
     });
   } catch (error: any) {
     return res.status(400).json({
       success: false,
-      message: error?.message || 'Unable to create subscription plan',
+      message: error?.message || "Unable to create subscription plan",
     });
   }
 };
@@ -227,20 +238,20 @@ export const updatePlanController = async (req: Request, res: Response) => {
     const problem = validatePlanBody(body, true);
 
     if (problem) {
-      return res.status(400).json({success: false, message: problem});
+      return res.status(400).json({ success: false, message: problem });
     }
 
     const plan = await updatePlan(String(req.params.id), pickPlanFields(body));
 
     return res.status(200).json({
       success: true,
-      message: 'Subscription plan updated successfully',
-      data: {plan},
+      message: "Subscription plan updated successfully",
+      data: { plan },
     });
   } catch (error: any) {
     return res.status(400).json({
       success: false,
-      message: error?.message || 'Unable to update subscription plan',
+      message: error?.message || "Unable to update subscription plan",
     });
   }
 };
@@ -248,33 +259,33 @@ export const updatePlanController = async (req: Request, res: Response) => {
 // POST /subscriptions/admin/grant  { sellerId, planId }
 export const grantSubscriptionController = async (
   req: Request,
-  res: Response,
+  res: Response
 ) => {
   try {
-    const {sellerId, planId} = req.body || {};
+    const { sellerId, planId } = req.body || {};
 
     if (!sellerId || !planId) {
       return res.status(400).json({
         success: false,
-        message: 'sellerId and planId are required',
+        message: "sellerId and planId are required",
       });
     }
 
     const subscription = await activateSubscription(
       sellerId,
       planId,
-      'ADMIN_GRANT',
+      "ADMIN_GRANT"
     );
 
     return res.status(201).json({
       success: true,
-      message: 'Subscription granted successfully',
-      data: {subscription},
+      message: "Subscription granted successfully",
+      data: { subscription },
     });
   } catch (error: any) {
     return res.status(400).json({
       success: false,
-      message: error?.message || 'Unable to grant subscription',
+      message: error?.message || "Unable to grant subscription",
     });
   }
 };
@@ -286,25 +297,27 @@ export const grantSubscriptionController = async (
 // POST /subscriptions/purchase  { planId }  (SELLER)
 export const purchasePlanController = async (
   req: AuthRequest,
-  res: Response,
+  res: Response
 ) => {
   try {
     const sellerId = req.user?.userId;
-    const {planId} = req.body || {};
+    const { planId } = req.body || {};
 
     if (!sellerId) {
-      return res.status(401).json({success: false, message: 'Unauthorized'});
+      return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
     if (!planId) {
-      return res.status(400).json({success: false, message: 'planId is required'});
+      return res
+        .status(400)
+        .json({ success: false, message: "planId is required" });
     }
 
     const order = await createPurchaseOrder(sellerId, planId);
 
     return res.status(201).json({
       success: true,
-      message: 'Order created. Complete the payment using paymentSessionId.',
+      message: "Order created. Complete the payment using paymentSessionId.",
       data: {
         orderId: order.orderId,
         paymentSessionId: order.paymentSessionId,
@@ -313,20 +326,27 @@ export const purchasePlanController = async (
         environment: cashfreeConfig.environment,
         plan: order.plan,
         // Local testing only: open this URL in a browser to finish a sandbox payment
-        ...(process.env.NODE_ENV !== 'production' && order.paymentSessionId
-          ? {
-              devCheckoutUrl: `${req.protocol}://${req.get('host')}/api/v1/subscriptions/dev/checkout?session=${encodeURIComponent(order.paymentSessionId)}`,
-            }
-          : {}),
+        devCheckoutUrl: order.paymentSessionId
+          ? `${req.protocol}://${req.get(
+              "host"
+            )}/api/v1/subscriptions/dev/checkout?session=${encodeURIComponent(
+              order.paymentSessionId
+            )}`
+          : null,
+        // ...(process.env.NODE_ENV !== 'production' && order.paymentSessionId
+        //   ? {
+        //       devCheckoutUrl: `${req.protocol}://${req.get('host')}/api/v1/subscriptions/dev/checkout?session=${encodeURIComponent(order.paymentSessionId)}`,
+        //     }
+        //   : {}),
         order,
       },
     });
   } catch (error: any) {
-    console.error('PURCHASE PLAN ERROR:', error);
+    console.error("PURCHASE PLAN ERROR:", error);
 
     return res.status(400).json({
       success: false,
-      message: error?.message || 'Unable to create order',
+      message: error?.message || "Unable to create order",
     });
   }
 };
@@ -334,26 +354,26 @@ export const purchasePlanController = async (
 // POST /subscriptions/orders/:orderId/verify  (SELLER)
 export const verifyOrderController = async (
   req: AuthRequest,
-  res: Response,
+  res: Response
 ) => {
   try {
     const sellerId = req.user?.userId;
 
     if (!sellerId) {
-      return res.status(401).json({success: false, message: 'Unauthorized'});
+      return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
-    const {order, quota, cashfree} = (await syncOrderWithCashfree(
+    const { order, quota, cashfree } = (await syncOrderWithCashfree(
       String(req.params.orderId),
-      sellerId,
+      sellerId
     )) as any;
 
     const message =
-      order.status === 'PAID'
-        ? 'Payment successful. Subscription activated.'
-        : order.status === 'FAILED'
-          ? 'Payment failed or the order expired.'
-          : 'Payment not completed yet.';
+      order.status === "PAID"
+        ? "Payment successful. Subscription activated."
+        : order.status === "FAILED"
+        ? "Payment failed or the order expired."
+        : "Payment not completed yet.";
 
     return res.status(200).json({
       success: true,
@@ -367,57 +387,51 @@ export const verifyOrderController = async (
       },
     });
   } catch (error: any) {
-    console.error('VERIFY ORDER ERROR:', error);
+    console.error("VERIFY ORDER ERROR:", error);
 
     return res.status(400).json({
       success: false,
-      message: error?.message || 'Unable to verify payment',
+      message: error?.message || "Unable to verify payment",
     });
   }
 };
 
 // GET /subscriptions/orders  (SELLER)
-export const listOrdersController = async (
-  req: AuthRequest,
-  res: Response,
-) => {
+export const listOrdersController = async (req: AuthRequest, res: Response) => {
   try {
     const sellerId = req.user?.userId;
 
     if (!sellerId) {
-      return res.status(401).json({success: false, message: 'Unauthorized'});
+      return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
     const orders = await listSellerOrders(sellerId);
 
-    return res.status(200).json({success: true, data: {orders}});
+    return res.status(200).json({ success: true, data: { orders } });
   } catch (error: any) {
     return res.status(400).json({
       success: false,
-      message: error?.message || 'Unable to fetch orders',
+      message: error?.message || "Unable to fetch orders",
     });
   }
 };
 
 // GET /subscriptions/orders/:orderId  (SELLER)
-export const getOrderController = async (
-  req: AuthRequest,
-  res: Response,
-) => {
+export const getOrderController = async (req: AuthRequest, res: Response) => {
   try {
     const sellerId = req.user?.userId;
 
     if (!sellerId) {
-      return res.status(401).json({success: false, message: 'Unauthorized'});
+      return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
     const order = await getSellerOrder(sellerId, String(req.params.orderId));
 
-    return res.status(200).json({success: true, data: {order}});
+    return res.status(200).json({ success: true, data: { order } });
   } catch (error: any) {
     return res.status(404).json({
       success: false,
-      message: error?.message || 'Order not found',
+      message: error?.message || "Order not found",
     });
   }
 };
@@ -429,42 +443,44 @@ export const getOrderController = async (
 
 export const cashfreeWebhookController = async (
   req: Request,
-  res: Response,
+  res: Response
 ) => {
   try {
     const rawBody = Buffer.isBuffer(req.body)
-      ? req.body.toString('utf8')
-      : typeof req.body === 'string'
-        ? req.body
-        : JSON.stringify(req.body || {});
+      ? req.body.toString("utf8")
+      : typeof req.body === "string"
+      ? req.body
+      : JSON.stringify(req.body || {});
 
     const valid = verifyWebhookSignature(
       rawBody,
-      req.headers['x-webhook-timestamp'] as string | undefined,
-      req.headers['x-webhook-signature'] as string | undefined,
+      req.headers["x-webhook-timestamp"] as string | undefined,
+      req.headers["x-webhook-signature"] as string | undefined
     );
 
     if (!valid) {
-      return res.status(401).json({success: false, message: 'Invalid signature'});
+      return res
+        .status(401)
+        .json({ success: false, message: "Invalid signature" });
     }
 
     const event = JSON.parse(rawBody);
     const orderId = event?.data?.order?.order_id;
 
     // Only payment events for our orders matter; acknowledge everything else
-    if (orderId && String(event?.type || '').startsWith('PAYMENT_')) {
+    if (orderId && String(event?.type || "").startsWith("PAYMENT_")) {
       try {
         await syncOrderWithCashfree(orderId);
       } catch (error) {
-        console.error('WEBHOOK SYNC ERROR:', error);
+        console.error("WEBHOOK SYNC ERROR:", error);
       }
     }
 
-    return res.status(200).json({success: true});
+    return res.status(200).json({ success: true });
   } catch (error) {
-    console.error('CASHFREE WEBHOOK ERROR:', error);
+    console.error("CASHFREE WEBHOOK ERROR:", error);
 
-    return res.status(400).json({success: false});
+    return res.status(400).json({ success: false });
   }
 };
 
@@ -475,37 +491,37 @@ export const cashfreeWebhookController = async (
 // POST /subscriptions/dev/orders/:orderId/simulate-payment  { status?: "SUCCESS" | "FAILED" }
 export const simulatePaymentController = async (
   req: AuthRequest,
-  res: Response,
+  res: Response
 ) => {
   try {
     const sellerId = req.user?.userId;
 
     if (!sellerId) {
-      return res.status(401).json({success: false, message: 'Unauthorized'});
+      return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
-    const status = req.body?.status === 'FAILED' ? 'FAILED' : 'SUCCESS';
+    const status = req.body?.status === "FAILED" ? "FAILED" : "SUCCESS";
 
-    const {order, quota, cashfree} = (await simulateSandboxPayment(
+    const { order, quota, cashfree } = (await simulateSandboxPayment(
       sellerId,
       String(req.params.orderId),
-      status,
+      status
     )) as any;
 
     return res.status(200).json({
       success: true,
       message:
-        order.status === 'PAID'
-          ? 'Payment simulated. Subscription activated.'
-          : 'Payment simulated. Order is not paid yet - run verify again in a few seconds.',
-      data: {status: order.status, order, quota, cashfree},
+        order.status === "PAID"
+          ? "Payment simulated. Subscription activated."
+          : "Payment simulated. Order is not paid yet - run verify again in a few seconds.",
+      data: { status: order.status, order, quota, cashfree },
     });
   } catch (error: any) {
-    console.error('SIMULATE PAYMENT ERROR:', error);
+    console.error("SIMULATE PAYMENT ERROR:", error);
 
     return res.status(400).json({
       success: false,
-      message: error?.message || 'Unable to simulate payment',
+      message: error?.message || "Unable to simulate payment",
     });
   }
 };
@@ -513,19 +529,19 @@ export const simulatePaymentController = async (
 // Browser page that opens Cashfree hosted checkout. OPEN IT IN A BROWSER, not Postman
 // (Postman only shows the HTML text and never runs the script).
 export const devCheckoutPage = (req: Request, res: Response) => {
-  if (process.env.NODE_ENV === 'production') {
-    return res.status(404).send('Not found');
+  if (process.env.NODE_ENV === "production") {
+    return res.status(404).send("Not found");
   }
 
-  const session = String(req.query.session || '');
+  const session = String(req.query.session || "");
 
   // Dev page only: drop the strict security headers so Cashfree's SDK can load.
-  res.removeHeader('Content-Security-Policy');
-  res.removeHeader('Cross-Origin-Opener-Policy');
-  res.removeHeader('Cross-Origin-Embedder-Policy');
-  res.removeHeader('Cross-Origin-Resource-Policy');
+  res.removeHeader("Content-Security-Policy");
+  res.removeHeader("Cross-Origin-Opener-Policy");
+  res.removeHeader("Cross-Origin-Embedder-Policy");
+  res.removeHeader("Cross-Origin-Resource-Policy");
 
-  return res.type('html').send(`<!doctype html>
+  return res.type("html").send(`<!doctype html>
 <html><head><meta charset="utf-8"><title>NeevSathi sandbox checkout</title></head>
 <body style="font-family:sans-serif;max-width:640px;margin:24px auto">
 <h3>NeevSathi - sandbox checkout</h3>
@@ -575,13 +591,15 @@ export const devCheckoutPage = (req: Request, res: Response) => {
 };
 
 export const devPaymentResultPage = (req: Request, res: Response) => {
-  if (process.env.NODE_ENV === 'production') {
-    return res.status(404).send('Not found');
+  if (process.env.NODE_ENV === "production") {
+    return res.status(404).send("Not found");
   }
 
-  const orderId = String(req.query.order_id || '').replace(/[^\w-]/g, '');
+  const orderId = String(req.query.order_id || "").replace(/[^\w-]/g, "");
 
-  return res.type('html').send(
-    `<h3>Checkout finished</h3><p>Order: <b>${orderId}</b></p><p>Now go back to Postman and run <b>Verify payment</b>.</p>`,
-  );
+  return res
+    .type("html")
+    .send(
+      `<h3>Checkout finished</h3><p>Order: <b>${orderId}</b></p><p>Now go back to Postman and run <b>Verify payment</b>.</p>`
+    );
 };
