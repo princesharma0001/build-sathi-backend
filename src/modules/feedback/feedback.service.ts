@@ -150,10 +150,18 @@ const loadParticipants = async (orderId: string) => {
 };
 
 // Feedback opens only after the order is completed (both sides confirmed delivery)
-const eligibilityProblem = (orderStatus: string) =>
-  orderStatus === 'COMPLETED'
+
+const eligibilityProblem = (orderStatus: string) => {
+  const allowedStatuses = ['DELIVERED', 'COMPLETED'];
+
+  return allowedStatuses.includes(
+    String(orderStatus).toUpperCase(),
+  )
     ? null
-    : `Feedback opens after the order is completed. Current status: ${orderStatus.toLowerCase()}.`;
+    : `Feedback opens after delivery. Current status: ${String(
+        orderStatus,
+      ).toLowerCase()}.`;
+};
 
 export const createFeedback = async (input: {
   userId: string;
