@@ -44,21 +44,22 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  buyerProfile       BuyerProfile?
-  sellerProfile      SellerProfile?
-  deliveryAddresses  DeliveryAddress[]
-  sellerQuotes       Quote[]
-  requirements       Requirement[]
-  
+  buyerProfile      BuyerProfile?
+  sellerProfile     SellerProfile?
+  deliveryAddresses DeliveryAddress[]
+  sellerQuotes      Quote[]
+  requirements      Requirement[]
+
   subscriptions      SellerSubscription[]
   subscriptionOrders SubscriptionOrder[]
   buyerOrders        Order[]              @relation("BuyerOrders")
   sellerOrders       Order[]              @relation("SellerOrders")
-  deviceTokens UserDeviceToken[]
-  notifications Notification[]
-  feedbackGiven      Feedback[] @relation("FeedbackGiven")
-  feedbackReceived   Feedback[] @relation("FeedbackReceived")
-
+  deviceTokens       UserDeviceToken[]
+  notifications      Notification[]
+  feedbackGiven      Feedback[]           @relation("FeedbackGiven")
+  feedbackReceived   Feedback[]           @relation("FeedbackReceived")
+  supportTickets     SupportTicket[]
+  googleId String? @unique
 
   @@index([email])
   @@index([role])
@@ -446,7 +447,7 @@ model Order {
   material Material @relation(fields: [materialId], references: [id], onDelete: Restrict)
 
   deliveryAddress DeliveryAddress @relation(fields: [deliveryAddressId], references: [id], onDelete: Restrict)
-  feedbacks Feedback[]
+  feedbacks       Feedback[]
 
   @@index([buyerId])
   @@index([sellerId])
@@ -475,20 +476,19 @@ model Otp {
   @@index([expiresAt])
 }
 
-
 model Notification {
-  id        String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  type      String
-  title     String
-  body      String
+  type  String
+  title String
+  body  String
 
-  data      Json?
+  data Json?
 
-  isRead    Boolean  @default(false)
+  isRead Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -503,16 +503,96 @@ model Feedback {
   reviewerId String
   revieweeId String
 
-  rating  Int // 1 to 5
-  comment String?
-  order    Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  reviewer User  @relation("FeedbackGiven", fields: [reviewerId], references: [id], onDelete: Cascade)
-  reviewee User  @relation("FeedbackReceived", fields: [revieweeId], references: [id], onDelete: Cascade)
+  rating    Int // 1 to 5
+  comment   String?
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  reviewer  User     @relation("FeedbackGiven", fields: [reviewerId], references: [id], onDelete: Cascade)
+  reviewee  User     @relation("FeedbackReceived", fields: [revieweeId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([orderId, reviewerId])
   @@index([revieweeId, createdAt])
   @@index([reviewerId])
+}
 
+enum ContentType {
+  TERMS
+  PRIVACY
+  ABOUT
+}
+
+model AppContent {
+  id          String      @id @default(cuid())
+  type        ContentType @unique
+  title       String
+  slug        String      @unique
+  content     String      @db.Text
+  isPublished Boolean     @default(false)
+  version     Int         @default(1)
+  publishedAt DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([isPublished])
+  @@map("app_content")
+}
+
+enum SupportTicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum SupportTicketCategory {
+  ACCOUNT
+  ORDER
+  PAYMENT
+  SUBSCRIPTION
+  APP_BUG
+  OTHER
+}
+
+model SupportTicket {
+  id            String          @id @default(uuid())
+  ticketNumber  String          @unique
+  userId        String
+  role          SupportRole
+  category      String
+  subject       String
+  description   String          @db.Text
+  screenshotUrl String?
+  status        SupportStatus   @default(OPEN)
+  priority      SupportPriority @default(MEDIUM)
+  adminReply    String?         @db.Text
+  resolvedAt    DateTime?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([status, priority])
+  @@index([role, createdAt])
+  @@map("support_tickets")
+}
+
+enum SupportStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum SupportPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum SupportRole {
+  BUYER
+  SELLER
 }

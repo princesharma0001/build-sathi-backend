@@ -9,6 +9,11 @@ import quoteRoutes from "../modules/quote/quote.routes"
 import subscriptionRoutes from "../modules/subscription/subscription.routes"
 import notificationRoutes from "../modules/notifications/notification.routes";
 import feedbackRoutes from "../modules/feedback/feedback.routes";
+import { adminContentRouter, publicContentRouter } from '../modules/content/content.routes';
+import { authMiddleware } from '../middleware/auth.middleware';
+import { adminMiddleware } from '../middleware/admin.middleware';
+import supportRoutes from '../modules/support/support.routes';
+import adminSupportRoutes from "../modules/support/admin-support.routes"
 const router = Router();
 
 // API root
@@ -52,6 +57,28 @@ router.use('/quotes', quoteRoutes);
 router.use('/subscriptions', subscriptionRoutes);
 router.use('/feedback', feedbackRoutes);
 
+// Public content APIs: Buyer and Seller app
+router.use('/content', publicContentRouter);
 
+// Protected APIs: Admin only
+router.use(
+  '/admin/content',
+  authMiddleware,
+  adminMiddleware,
+  adminContentRouter,
+);
+
+// Buyer & Seller support APIs
+// Login required
+router.use('/support', authMiddleware, supportRoutes);
+
+// Admin support APIs
+// Admin login + ADMIN role required
+router.use(
+  '/admin/support',
+  authMiddleware,
+  adminMiddleware,
+  adminSupportRoutes,
+);
 
 export default router;

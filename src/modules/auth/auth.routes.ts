@@ -11,6 +11,7 @@ import {
   verifyEmailOtp,
   verifyForgotPasswordOtpController,
 } from './auth.controller';
+import { googleLogin } from './google-auth.controller';
 
 const router = Router();
 router.post("/admin/login", adminLoginController);
@@ -31,6 +32,8 @@ router.post(
 );
 
 router.post('/login', login);
+router.post('/google', googleLogin);
+
 
 router.post(
   '/forgot-password',
